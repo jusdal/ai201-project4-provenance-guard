@@ -39,7 +39,13 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
-
+1. A writer sends their text. It goes to POST /submit as JSON: {"text": "...", "creator_id": "..."}.
+2. The route checks it. app.py::submit rejects text that's missing, empty or enormous (400) and gives the submission a content_id.
+3. Signal one reads it. detector.model_signal runs a small language model (gpt2) on your laptop to measure how predictable the text is. That becomes model_score (0 = human-ish, 1 = AI-ish).
+4. Signal two measures its shape. stylometry.style_signal looks at variation in sentence length, word variety and punctuation, which gives style_score (0–1).
+5. The scores are combined. scoring.combine_signals turns the two scores into one combined score.
+6. The score becomes words. scoring.score_to_label maps the combined score to a guess (human / unsure / ai) and a plain-English sentence.
+7. It's logged and returned. audit.log_decision writes everything to logs/audit.jsonl with status decided. The writer gets back the label, both scores and the content_id, which they need to appeal (POST /appeal → status under_review).
 
 ---
 
@@ -50,6 +56,17 @@
 
      The blind spot is not optional. If you can't name it you don't understand
      the signal yet — and unit 8's attack set is built out of blind spots. -->
+
+Signal one (model):
+
+What it measures: how predictable the text is to a language model (perplexity).
+Why it might differ: AI writes by picking likely next words, so its output is easy for a model to predict. People make odder, more specific choices.
+What it can't see: predictability isn't authorship. Plain, simple human writing (second-language writers, younger writers, anyone writing simply on purpose) looks just as predictable. Fancy writing full of rare words reads as human even when an AI wrote it.
+Signal two (style):
+
+What it measures: the shape of the text without understanding it: sentence-length variation, vocabulary variety and punctuation.
+Why it might differ: AI tends toward even, mid-length sentences and a narrower vocabulary. Human writing is lumpier.
+What it can't see: it can't read. Anything that changes the shape but not the substance fools it: added typos, chopped-up sentences, a pasted quote. Word variety also drops on longer texts regardless of who wrote them.
 
 ### Signal one — the model signal
 
@@ -83,8 +100,6 @@
 
 **A case where my two signals split, and what my rule does with it:**
 
-
-
 ---
 
 ## Label Variants
@@ -94,18 +109,17 @@
 
      Write them for someone who has never heard the word "threshold". -->
 
-| Label | Score range | The exact text a reader sees |
-|---|---|---|
-| high-confidence human |  |  |
-| unsure |  |  |
-| high-confidence AI |  |  |
+| Label                 | Score range | The exact text a reader sees |
+| --------------------- | ----------- | ---------------------------- |
+| high-confidence human |             |                              |
+| unsure                |             |                              |
+| high-confidence AI    |             |                              |
 
 **Why I worded the "unsure" one this way:**
+
 <!-- It's the hardest of the three. It has to admit uncertainty without
      sounding like an accusation, because the person reading it may well have
      written every word themselves. -->
-
-
 
 ---
 
@@ -159,15 +173,15 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- _What I asked for:_
+- _What came back:_
+- _What I changed:_
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- _What I asked for:_
+- _What came back:_
+- _What I changed:_
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
@@ -178,6 +192,7 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 **My limits:** ___ per minute, ___ per day
 
 **Why those numbers and not others:**
+
 <!-- Think about two people: a real writer submitting their own work a few
      times an hour, and a script sending a thousand variations to map your
      thresholds. Your numbers have to be liveable for the first and hostile to
@@ -202,8 +217,6 @@ can look like one. -->
 <!-- Every attack with its outcome and a held-or-broke mark.
      `run_attacks.py --label before` produces the table. -->
 
-
-
 **Ten audit log entries from the run**
 
 <!-- Choose entries that show the interesting failures, not the ten easiest. -->
@@ -215,8 +228,6 @@ can look like one. -->
 **The single worst outcome** — the one I'd least want to explain to a writer
 whose work got caught by it:
 
-
-
 ---
 
 ## Run Log and Verdicts
@@ -224,12 +235,12 @@ whose work got caught by it:
 <!-- Your five criteria across three trials. `run_eval.py --label before`. -->
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
-|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| --------- | ------ | ----- | ----- | ----- | ------- |
+| 1.        |        |       |       |       |         |
+| 2.        |        |       |       |       |         |
+| 3.        |        |       |       |       |         |
+| 4.        |        |       |       |       |         |
+| 5.        |        |       |       |       |         |
 
 **Real output from one trial**, pasted as text, naming the file and function
 that produced it:
@@ -254,8 +265,6 @@ that produced it:
 
      Look for a pattern. Five failures on one signal is one problem, not five. -->
 
-
-
 ---
 
 ## The Improvement
@@ -268,14 +277,10 @@ that produced it:
 
 <!-- Same format. `run_attacks.py --label after` -->
 
-
-
 **Did it help, and how do I know:**
 
 <!-- Widening the unsure band usually fixes one problem and creates another.
      Reporting that trade honestly is worth full credit. -->
-
-
 
 ---
 
@@ -284,14 +289,10 @@ that produced it:
 <!-- For each attack still getting through and each criterion still missed:
      what you'd do, and why you stopped. -->
 
-
-
 **The trade I'd make if this ran for real:**
 
 <!-- Two sentences. Fewer wrong accusations means more AI text getting through.
      Say which way you'd go and WHO PAYS FOR IT. -->
-
-
 
 <!-- ═════════════════════════════════════════════════════════════════════
 
