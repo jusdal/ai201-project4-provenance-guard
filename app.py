@@ -22,6 +22,7 @@ Routes:
     POST /appeal      ← YOU BUILD THIS (Milestone 5)
     GET  /log         the audit log. Already works
     GET  /health      is the service up, and is the model loaded
+    GET  /content/<id> one item's current status (stretch)
 """
 
 import uuid
@@ -387,6 +388,45 @@ def appeal():
             }
         ),
         200,
+    )
+
+
+@app.get("/content/<content_id>")
+def content(content_id):
+    """
+    One item's current status. Stretch feature — read-only.
+
+        curl http://127.0.0.1:5000/content/c_66f299df9c6d
+
+    The log is append-only, so "current" means the latest entry for this id:
+    `decided` until someone appeals, `under_review` after.
+    """
+    entries = audit.entries_for(content_id)
+    decisions = [e for e in entries if e.get("status") == "decided"]
+    if not decisions:
+        return (
+            jsonify(
+                {
+                    "error": "not_found",
+                    "message": f"No submission with content_id {content_id!r}.",
+                }
+            ),
+            404,
+        )
+
+    decision = decisions[0]
+    return jsonify(
+        {
+            "content_id": content_id,
+            "status": entries[-1]["status"],
+            "guess": decision.get("guess"),
+            "label": decision.get("label"),
+            "combined_score": decision.get("combined_score"),
+            "model_score": decision.get("model_score"),
+            "style_score": decision.get("style_score"),
+            "submitted_at": decision.get("timestamp"),
+            "appeals": sum(1 for e in entries if e.get("event") == "appeal"),
+        }
     )
 
 

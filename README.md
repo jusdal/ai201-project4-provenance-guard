@@ -374,7 +374,67 @@ The planned contract:
 - Unknown `content_id` → `404` with `{"error": "not_found", "message": ...}`.
 - Read-only: it never writes to the log.
 
-The request and response it returns will go here once it's built.
+**Built:** `app.py::content`. It reads `audit.entries_for(id)`, takes the
+status from the latest entry and the scores and label from the original
+decision. Nothing changes until someone asks: the log is still append-only,
+and the endpoint only reads it.
+
+**What it changed:** a writer can now see their item move from `decided` to
+`under_review` after appealing, which before was only visible in the raw log.
+
+**An item that was appealed** (the Sample Run submission; it shows 2 appeals
+because I also tested an appeal with empty reasoning on it):
+
+```bash
+$ curl http://127.0.0.1:5000/content/c_09e022f93384
+```
+
+```json
+{
+  "appeals": 2,
+  "combined_score": 0.763,
+  "content_id": "c_09e022f93384",
+  "guess": "ai",
+  "label": "This text has strong patterns we usually see in writing from AI tools. Our check can be wrong, especially on plain or simple writing. If you wrote this yourself, ask for a review and a person will look at it. Nothing changes until they do.",
+  "model_score": 0.7544,
+  "status": "under_review",
+  "style_score": 0.8173,
+  "submitted_at": "2026-11-02T15:17:20+00:00"
+}
+```
+
+**An item nobody appealed:**
+
+```bash
+$ curl http://127.0.0.1:5000/content/c_7514b736f6f2
+```
+
+```json
+{
+  "appeals": 0,
+  "combined_score": 0.2389,
+  "content_id": "c_7514b736f6f2",
+  "guess": "human",
+  "label": "This reads like writing by a person. We didn't find the patterns we usually see in text from AI tools.",
+  "model_score": 0.4445,
+  "status": "decided",
+  "style_score": 0.0,
+  "submitted_at": "2026-11-02T15:17:11+00:00"
+}
+```
+
+**An id that doesn't exist:**
+
+```bash
+$ curl http://127.0.0.1:5000/content/c_doesnotexist
+```
+
+```json
+{
+  "error": "not_found",
+  "message": "No submission with content_id 'c_doesnotexist'."
+}
+```
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
