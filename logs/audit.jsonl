@@ -1,0 +1,10 @@
+{"timestamp": "2026-11-02T15:01:01+00:00", "content_id": "c_90a46abbe8bb", "creator_id": "demo_instructor", "guess": "unsure", "model_score": 0.7544, "style_score": null, "combined_score": null, "label": "not built yet", "status": "decided"}
+{"timestamp": "2026-11-02T15:01:01+00:00", "content_id": "c_9b5d21b6af4d", "creator_id": "demo_instructor", "guess": "unsure", "model_score": 0.4445, "style_score": null, "combined_score": null, "label": "not built yet", "status": "decided"}
+{"timestamp": "2026-11-02T15:01:01+00:00", "creator_id": "u1", "event": "rejected", "status": "rejected", "reason": "bad_text", "text_length": null}
+{"timestamp": "2026-11-02T15:01:01+00:00", "creator_id": "u1", "event": "rejected", "status": "rejected", "reason": "bad_text", "text_length": 3}
+{"timestamp": "2026-11-02T15:01:01+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "bad_creator_id", "text_length": 28}
+{"timestamp": "2026-11-02T15:01:01+00:00", "creator_id": "u1", "event": "rejected", "status": "rejected", "reason": "too_short", "text_length": 2}
+{"timestamp": "2026-11-02T15:01:01+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "bad_text", "text_length": null}
+{"timestamp": "2026-11-02T15:01:01+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "bad_text", "text_length": null}
+{"timestamp": "2026-11-02T15:01:01+00:00", "creator_id": "u1", "event": "rejected", "status": "rejected", "reason": "too_long", "text_length": 5001}
+{"timestamp": "2026-11-02T15:01:02+00:00", "content_id": "c_28853ebf551f", "creator_id": "u1", "guess": "unsure", "model_score": 0.9973, "style_score": null, "combined_score": null, "label": "not built yet", "status": "decided"}

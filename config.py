@@ -46,6 +46,11 @@ DETECTOR_MODEL = os.getenv("AI201_DETECTOR_MODEL", "gpt2")
 # 300 words, which is enough for the signal to mean something.
 DETECTOR_MAX_TOKENS = 400
 
+# Longest text /submit accepts. The model only reads the first 400 tokens
+# (~1,600 characters) anyway; this fits a long essay excerpt and stops someone
+# sending megabytes. See notes/milestone1.md.
+MAX_TEXT_CHARS = 5000
+
 
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
 # How much each signal counts toward the combined score.

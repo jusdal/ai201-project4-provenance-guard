@@ -223,19 +223,25 @@ def submit():
     # A JSON body that's a list or a string has no .get — treat it as empty.
     if not isinstance(payload, dict):
         payload = {}
-    text = payload.get("text", "")
-    creator_id = payload.get("creator_id", "unknown")
+    text = payload.get("text")
+    creator_id = payload.get("creator_id")
 
     # Validate BEFORE running the model — bad input should never reach it.
+    # Every rejection is logged with the text's length, never the text itself.
     if not isinstance(text, str) or not text.strip():
-        return (
-            jsonify(
-                {
-                    "error": "bad_request",
-                    "message": "Send JSON with a non-empty text.",
-                }
-            ),
-            400,
+        return _reject(
+            400, "bad_request", "bad_text", creator_id, text,
+            "Send JSON with a non-empty text.",
+        )
+    if not isinstance(creator_id, str) or not creator_id.strip():
+        return _reject(
+            400, "bad_request", "bad_creator_id", creator_id, text,
+            "Send JSON with a non-empty creator_id.",
+        )
+    if len(text) > config.MAX_TEXT_CHARS:
+        return _reject(
+            400, "text_too_long", "too_long", creator_id, text,
+            f"Text is over {config.MAX_TEXT_CHARS:,} characters.",
         )
 
     import detector
@@ -244,14 +250,25 @@ def submit():
         model_score = detector.model_signal(text)
     except ValueError as exc:
         # The detector raises this when the text is too short to score.
-        return jsonify({"error": "bad_request", "message": str(exc)}), 400
+        return _reject(400, "text_too_short", "too_short", creator_id, text, str(exc))
+    except detector.DetectorUnavailable:
+        return _reject(
+            503, "detector_unavailable", "detector_unavailable", creator_id, text,
+            "The detector model isn't available right now. Try again later.",
+        )
+
+    # Placeholders until Milestones 4 and 5 build the score and the label.
+    guess = "unsure"
+    label = "not built yet"
 
     # Step 4 - log the decision. The content_id is what /appeal needs later.
     content_id = f"c_{uuid.uuid4().hex[:12]}"
     audit.log_decision(
         content_id=content_id,
         creator_id=creator_id,
+        guess=guess,
         model_score=model_score,
+        label=label,
         status="decided",
     )
 
@@ -259,15 +276,25 @@ def submit():
         jsonify(
             {
                 "content_id": content_id,
-                "guess": "unsure",
-                "confidence": 0.5,
-                "label": "not built yet",
+                "guess": guess,
+                "confidence": 0.0,
+                "label": label,
                 "model_score": model_score,
                 "style_score": None,
             }
         ),
         200,
     )
+
+
+def _reject(status, error, reason, creator_id, text, message):
+    """Log a refused submission, then answer with the shared error shape."""
+    audit.log_rejection(
+        creator_id=creator_id if isinstance(creator_id, str) and creator_id.strip() else "unknown",
+        reason=reason,
+        text_length=len(text) if isinstance(text, str) else None,
+    )
+    return jsonify({"error": error, "message": message}), status
 
 
 @app.post("/appeal")

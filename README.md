@@ -135,14 +135,40 @@ What it can't see: it can't read. Anything that changes the shape but not the su
      two off the response, so leaving them out costs you next unit's
      diagnostics. -->
 
+_Milestone 3: signal one only. `guess`, `confidence` and `label` are
+placeholders until Milestones 4 and 5; `style_score` is `null` until signal two
+exists._
+
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  -d @samples/clearly_human.json
 ```
 
 ```json
+{
+  "confidence": 0.0,
+  "content_id": "c_9b5d21b6af4d",
+  "guess": "unsure",
+  "label": "not built yet",
+  "model_score": 0.4445,
+  "style_score": null
+}
+```
 
+**A rejected submission** (text over 5,000 characters)
+
+```bash
+$ curl -X POST http://127.0.0.1:5000/submit \
+  -H "Content-Type: application/json" \
+  -d '{"text": "aaaa…5,001 characters…", "creator_id": "u1"}'
+```
+
+```json
+{
+  "error": "text_too_long",
+  "message": "Text is over 5,000 characters."
+}
 ```
 
 **An appeal**
@@ -159,12 +185,32 @@ $ curl -X POST http://127.0.0.1:5000/appeal \
 
 **What the log shows afterwards**
 
+_Milestone 3: the decision for the submission above, and the rejection._
+
 ```bash
 $ curl "http://127.0.0.1:5000/log?limit=3"
 ```
 
 ```json
-
+{
+  "timestamp": "2026-11-02T15:01:01+00:00",
+  "content_id": "c_9b5d21b6af4d",
+  "creator_id": "demo_instructor",
+  "guess": "unsure",
+  "model_score": 0.4445,
+  "style_score": null,
+  "combined_score": null,
+  "label": "not built yet",
+  "status": "decided"
+}
+{
+  "creator_id": "u1",
+  "event": "rejected",
+  "reason": "too_long",
+  "status": "rejected",
+  "text_length": 5001,
+  "timestamp": "2026-11-02T15:01:01+00:00"
+}
 ```
 
 ---
