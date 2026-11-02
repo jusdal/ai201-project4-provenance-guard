@@ -42,63 +42,109 @@ Two things worth knowing before you pick numbers:
   a **miss**.
 
 ---
-## 1.
+## 1. Real writers are rarely labelled AI
 
-<!-- Your criterion. It must name a number. -->
+Out of 20 human-written pieces (prose and poetry) in
+`samples/clearly_human.json` — including the second-language paragraph traced
+in `notes/milestone1.md` — **at most 1** comes back from `POST /submit` with
+`guess: "ai"` (the high-confidence AI label). This must hold **in each of 3
+trials**; a single trial with 2 is a miss.
 
-
-
-**Why this target:**
-
-
-
----
-
-## 2.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
-
-
+**Why this target:** Telling a real writer their work looks AI-generated costs
+them far more than missing some AI text costs the site, so "AI" should only be
+said when the text is overwhelmingly synthetic and everything ambiguous should
+fall into "unsure". The plain-writer paragraph is in the set on purpose: it's
+the input both of my signals are weakest on, so a criterion without it would be
+too easy.
 
 ---
 
-## 3.
+## 2. Scores spread apart, and all three labels are reachable
 
-<!-- Your criterion. -->
+Test suite: 15 clearly human pieces (`samples/clearly_human.json`), 15 clearly
+AI pieces (`samples/clearly_ai.json`) and 6 borderline pieces
+(`samples/borderline.json`), 36 in total. Using `combined_score` from each
+response, in **each of 3 trials**:
 
+- **Separation:** the mean `combined_score` of the 15 AI pieces is at least
+  **0.40** higher than the mean of the 15 human pieces.
+- **Coverage:** each of the three guesses (`"human"`, `"unsure"`, `"ai"`)
+  appears **at least 4 times** across the 36 responses.
 
+Both parts must pass for the criterion to pass.
 
-**Why this target:**
-
-
+**Why this target:** If scores bunch up around 0.5, the label is a coin flip
+dressed up as a judgment. A 0.40 gap is the width of my unsure band
+(0.35–0.80), so clear cases should land on opposite sides of it. Requiring 4 of
+each label proves "unsure" is a working buffer, not dead code — and the
+borderline set is what's meant to land there, so "unsure" isn't only reached
+through misclassified clear cases.
 
 ---
 
-## 4.
+## 3. Every appeal changes status and is recorded
 
-<!-- Your criterion. -->
+10 appeals against 10 different `content_id`s returned by `/submit` — 5 with
+written `reasoning` and 5 with `reasoning` empty or left out. For **10 of 10**:
 
+- the response is HTTP 200 with `status: "under_review"` and the same
+  `content_id`;
+- `GET /log` shows an appeal entry for that `content_id` with the exact
+  reasoning sent, and the original decision entry is still there, unchanged.
 
+Also, an appeal for a `content_id` that was never issued returns **404** with
+`{"error": "not_found", ...}`, in 3 of 3 attempts.
 
-**Why this target:**
-
-
+**Why this target:** The appeal is the only thing a wrongly flagged writer can
+do, so it can't fail even once. Empty reasoning is tested on purpose: I made it
+optional so a writer who can't argue in polished English can still appeal, and
+that promise needs checking too.
 
 ---
 
-## 5.
+## 4. Bad input gets a clean 400, never a crash
 
-<!-- Your criterion. -->
+Each of these 9 requests to `POST /submit` is sent 3 times (27 requests):
 
+1. `text` missing
+2. `creator_id` missing
+3. `text` is `""`
+4. `text` is whitespace only
+5. `creator_id` is `""`
+6. `text` is not a string (e.g. `123`)
+7. body is not JSON
+8. `text` too short to score (e.g. `"Hi."`)
+9. `text` is 5,001 characters
 
+**27 of 27** return HTTP 400 with a JSON body containing both `error` and
+`message` (the shape in `notes/milestone1.md`). Zero responses are 500. After
+the run, `POST /ping` still answers. A `text` of exactly 5,000 characters
+returns 200 in 3 of 3 attempts.
 
-**Why this target:**
+**Why this target:** Bad input should fail cleanly and tell the caller what was
+wrong, not crash the service or waste model time on megabytes of text. The
+5,000-character check makes sure the limit sits exactly where the contract says
+and doesn't reject a legitimate long piece.
 
+---
 
+## 5. Signal two actually changes outcomes
+
+Across the 36 inputs from criterion 2, in **each of 3 trials**:
+
+- **at least 5** inputs get a different `guess` than `model_score` alone would
+  get under the same thresholds (below 0.35 → human, 0.80 or above → AI,
+  otherwise unsure); and
+- the mean of `|combined_score − model_score|` is **at least 0.10**.
+
+Both are computed from the `model_score` and `combined_score` fields in each
+response.
+
+**Why this target:** The point of two signals is that the second one catches
+what the first misses. If signal two never changes a label, the service is a
+single-model detector with that model's blind spots — like calling plain human
+writing AI. 0.10 is the smallest shift that can move a score across a threshold
+often enough to matter.
 
 ---
 
