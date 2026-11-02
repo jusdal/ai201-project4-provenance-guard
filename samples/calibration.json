@@ -1,0 +1,27 @@
+[
+  {
+    "name": "clearly_ai",
+    "source": "samples/clearly_ai.json",
+    "text": "The importance of effective time management cannot be overstated in today's fast-paced work environment. Professionals who develop strong organizational habits are better positioned to meet deadlines and reduce stress. There are several key strategies that can help individuals improve their productivity. First, prioritization is essential. By identifying the most important tasks and addressing them first, workers can ensure that critical objectives are met. Second, minimizing distractions plays a significant role. Setting aside dedicated blocks of time for concentrated work is widely considered beneficial. Finally, regular breaks are important for maintaining performance."
+  },
+  {
+    "name": "clearly_human",
+    "source": "samples/clearly_human.json",
+    "text": "I didn't sleep. Not properly, anyway — I lay there listening to the boiler tick and thinking about the thing I'd said to Marcus at the pub, which was stupid, and which he will absolutely bring up again. Twice now. So: coffee, and the long way round to work, and a plan. The plan lasted until about ten past nine, when Priya asked how the weekend was and I said \"fine\" in the voice that means it wasn't, and she put her mug down and looked at me. That's the trouble with Priya. She notices."
+  },
+  {
+    "name": "formal_human",
+    "source": "Federalist No. 10, James Madison (1787), opening paragraph",
+    "text": "Among the numerous advantages promised by a well constructed Union, none deserves to be more accurately developed than its tendency to break and control the violence of faction. The friend of popular governments never finds himself so much alarmed for their character and fate, as when he contemplates their propensity to this dangerous vice. He will not fail, therefore, to set a due value on any plan which, without violating the principles to which he is attached, provides a proper cure for it. The instability, injustice, and confusion introduced into the public councils, have, in truth, been the mortal diseases under which popular governments have everywhere perished; as they continue to be the favorite and fruitful topics from which the adversaries to liberty derive their most specious declamations."
+  },
+  {
+    "name": "edited_ai",
+    "source": "samples/clearly_ai.json with light edits: contractions, one sentence split, one merged, a dash",
+    "text": "Effective time management matters more than people think in today's fast-paced work environment. Professionals who build strong organizational habits are better positioned to meet deadlines and they're less stressed. There are a few key strategies that can help. First, prioritization. By identifying the most important tasks and doing them first, workers make sure critical objectives get met. Second, minimizing distractions plays a big role — setting aside dedicated blocks of time for focused work is widely considered beneficial. Finally, regular breaks are important for keeping performance up."
+  },
+  {
+    "name": "plain_human",
+    "source": "notes/milestone1.md, the second-language writer",
+    "text": "I moved here two years ago. At first it was hard. I did not know many people and my English was not good. Now I have a job and some friends. I like the city. The winter is cold but the summer is nice. I want to stay here for a long time."
+  }
+]

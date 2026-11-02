@@ -257,7 +257,17 @@ def submit():
             "The detector model isn't available right now. Try again later.",
         )
 
-    # Placeholders until Milestones 4 and 5 build the score and the label.
+    import scoring
+    import stylometry
+
+    style_score = stylometry.style_signal(text)
+    combined_score = scoring.combine_signals(
+        model_score, style_score, word_count=len(stylometry.words(text))
+    )
+    # How far from a coin flip: 0 = no idea, 1 = as sure as the system gets.
+    confidence = round(abs(combined_score - 0.5) * 2, 4)
+
+    # Placeholders until Milestone 5 builds the label.
     guess = "unsure"
     label = "not built yet"
 
@@ -268,6 +278,8 @@ def submit():
         creator_id=creator_id,
         guess=guess,
         model_score=model_score,
+        style_score=style_score,
+        combined_score=combined_score,
         label=label,
         status="decided",
     )
@@ -277,10 +289,11 @@ def submit():
             {
                 "content_id": content_id,
                 "guess": guess,
-                "confidence": 0.0,
+                "confidence": confidence,
                 "label": label,
                 "model_score": model_score,
-                "style_score": None,
+                "style_score": style_score,
+                "combined_score": combined_score,
             }
         ),
         200,

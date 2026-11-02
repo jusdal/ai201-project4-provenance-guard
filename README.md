@@ -57,48 +57,111 @@
      The blind spot is not optional. If you can't name it you don't understand
      the signal yet — and unit 8's attack set is built out of blind spots. -->
 
-Signal one (model):
-
-What it measures: how predictable the text is to a language model (perplexity).
-Why it might differ: AI writes by picking likely next words, so its output is easy for a model to predict. People make odder, more specific choices.
-What it can't see: predictability isn't authorship. Plain, simple human writing (second-language writers, younger writers, anyone writing simply on purpose) looks just as predictable. Fancy writing full of rare words reads as human even when an AI wrote it.
-Signal two (style):
-
-What it measures: the shape of the text without understanding it: sentence-length variation, vocabulary variety and punctuation.
-Why it might differ: AI tends toward even, mid-length sentences and a narrower vocabulary. Human writing is lumpier.
-What it can't see: it can't read. Anything that changes the shape but not the substance fools it: added typos, chopped-up sentences, a pasted quote. Word variety also drops on longer texts regardless of who wrote them.
-
 ### Signal one — the model signal
 
-**What it measures:**
+**What it measures:** how predictable the text is to a small language model
+(gpt2, run locally), as perplexity, squashed onto 0–1 by
+`detector.py::model_signal`. Higher = more AI-like.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** AI writes by picking
+likely next words, so its output is easy for a model to predict. People make
+odder, more specific choices.
 
-**What it can't see:**
+**What it can't see:** predictability isn't authorship. Plain, simple human
+writing (second-language writers, younger writers, anyone writing simply on
+purpose) looks just as predictable. The plain paragraph from Milestone 1 scored
+**0.91**, higher than the clearly-AI sample (0.75). Fancy writing full of rare
+words reads as human even when an AI wrote it.
 
 ### Signal two — the style signal
 
-**What it measures:**
+**What it measures:** the shape of the text without reading it
+(`stylometry.py::style_signal`). Two measures go into the score:
 
-**Why that might differ between human and AI writing:**
+- **Sentence-length spread:** standard deviation of words per sentence divided
+  by the mean. 0.20 or less maps to 1.0 (AI); 0.90 or more maps to 0.0 (human).
+- **Punctuation density:** dashes, semicolons, colons, brackets, quotes, `!` and
+  `?` per 100 words, not counting full stops and commas, which everyone uses.
+  0 maps to 1.0 (AI); 4 or more maps to 0.0 (human).
 
-**What it can't see:**
+`style_score = 0.6 × spread + 0.4 × punctuation`. Higher = more AI-like.
+
+A third measure, **type-token ratio** (moving average over 50-word windows), is
+computed but **left out of the score**. On the calibration inputs it ran
+backwards: the AI texts had the *most* varied vocabulary (0.92 and 0.94),
+because formal AI prose cycles through synonyms. I didn't flip it to fit five
+samples.
+
+**Why that might differ between human and AI writing:** AI tends toward even,
+mid-length sentences and plain punctuation. Human writing is lumpier: a
+three-word sentence next to a thirty-word one, a dash, a question.
+
+**What it can't see:** it can't read. Anything that changes the shape but not
+the substance fools it: chopped-up sentences, an added dash or quotation. It
+also calls **even, plainly punctuated human writing** AI-like, so formal human
+prose (0.86) and the plain Milestone 1 paragraph (0.86) both score as AI. That
+is the same blind spot as signal one, which means that when the two agree on a
+plain writer it isn't two independent pieces of evidence.
 
 ### The combining rule
 
-<!-- Write the rule in words, then give the numbers. What happens when the two
-     signals disagree? -->
-
 **The rule:**
 
-**The numbers:**
+1. Take the weighted average of the two signals.
+2. If the text is short, pull that average toward 0.5 ("unsure") in proportion
+   to how short it is. From 100 words up there's no pull; at 50 words the
+   distance from 0.5 is halved.
+
+When the signals disagree, the average lands in the middle and the label is
+"unsure": two methods disagreeing *is* uncertainty.
+
+Why step 2: the plain human paragraph scored more AI-like than real AI text on
+**both** signals (model 0.91 vs 0.75, style 0.86 vs 0.82), so no choice of
+weights could separate them. Length was the only difference, and short text
+is thin evidence that shouldn't get a confident label either way.
+
+**The numbers** (`config.py`):
+
+| Setting | Value |
+|---|---|
+| `WEIGHT_MODEL_SIGNAL` / `WEIGHT_STYLE_SIGNAL` | 0.5 / 0.5 |
+| `FULL_CONFIDENCE_WORDS` | 100 |
+| `HUMAN_THRESHOLD` | 0.35 |
+| `AI_THRESHOLD` | 0.75 (Milestone 1 said 0.80; at 0.80 the clearly-AI sample could never be labelled AI) |
+
+```
+average  = 0.5 × model_score + 0.5 × style_score
+strength = min(1, words / 100)
+combined = 0.5 + (average − 0.5) × strength
+confidence = |combined − 0.5| × 2
+```
 
 **Where it lives:** `scoring.py::combine_signals`
 
 <!-- ⚠️ The grader checks your code against that line. If your rule lives
      somewhere else, say where. -->
 
-**A case where my two signals split, and what my rule does with it:**
+**Calibration run** (`samples/calibration.json`, through `POST /submit`):
+
+| Input | Words | model | style | combined |
+|---|---|---|---|---|
+| clearly AI | 92 | 0.754 | 0.817 | **0.763** |
+| clearly human | 94 | 0.445 | 0.000 | **0.239** |
+| formal human (Federalist No. 10) | 128 | 0.429 | 0.859 | **0.644** |
+| lightly-edited AI | 87 | 0.586 | 0.633 | **0.596** |
+| plain human (Milestone 1) | 53 | 0.910 | 0.859 | **0.704** |
+
+**A case where my two signals split, and what my rule does with it:** formal
+human writing (Federalist No. 10). Signal one says human (0.43): old, formal
+vocabulary is hard for gpt2 to predict. Signal two says AI (0.86): the
+sentences are long and even, with almost no dashes or questions. The average
+is 0.644, inside the unsure band, so the writer is told the system can't tell
+rather than being accused.
+
+**What this rule doesn't fix:** the protection for plain writers comes only from
+length. A plain writer who submits 150 words gets no pull toward unsure and
+would score about 0.88, which is "AI". The clearly-AI sample also clears the AI
+threshold by only 0.013.
 
 ---
 

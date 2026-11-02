@@ -53,14 +53,18 @@ MAX_TEXT_CHARS = 5000
 
 
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
-# How much each signal counts toward the combined score.
-#
-# ⚠️ These are placeholders. Milestone 4 asks you to write your combining rule
-# down BEFORE you code it, and to put the numbers in your README. Whatever you
-# decide, it goes here.
+# How much each signal counts toward the combined score. Equal: on the
+# calibration inputs neither signal was more trustworthy — they share the
+# plain-writing blind spot (README, Signals and Scoring).
 
 WEIGHT_MODEL_SIGNAL = 0.5
 WEIGHT_STYLE_SIGNAL = 0.5
+
+# Below this many words the combined score is pulled toward 0.5 (unsure), in
+# proportion to how short the text is. Short text is thin evidence, and it's
+# where the plain human paragraph in notes/milestone1.md out-scored real AI
+# text on both signals.
+FULL_CONFIDENCE_WORDS = 100
 
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────
@@ -77,7 +81,7 @@ WEIGHT_STYLE_SIGNAL = 0.5
 # that decide who pays for it.
 
 HUMAN_THRESHOLD = 0.35
-AI_THRESHOLD = 0.65
+AI_THRESHOLD = 0.75
 
 # ⚠️ One thing that catches people out in Milestone 5. A weighted average can
 # only land between its two inputs — so while `style_signal` is still the stub

@@ -8,3 +8,8 @@
 {"timestamp": "2026-11-02T15:01:01+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "bad_text", "text_length": null}
 {"timestamp": "2026-11-02T15:01:01+00:00", "creator_id": "u1", "event": "rejected", "status": "rejected", "reason": "too_long", "text_length": 5001}
 {"timestamp": "2026-11-02T15:01:02+00:00", "content_id": "c_28853ebf551f", "creator_id": "u1", "guess": "unsure", "model_score": 0.9973, "style_score": null, "combined_score": null, "label": "not built yet", "status": "decided"}
+{"timestamp": "2026-11-02T15:11:39+00:00", "content_id": "c_ca970ec30cc5", "creator_id": "calibration", "guess": "unsure", "model_score": 0.7544, "style_score": 0.8173, "combined_score": 0.763, "label": "not built yet", "status": "decided"}
+{"timestamp": "2026-11-02T15:11:39+00:00", "content_id": "c_61701a259b26", "creator_id": "calibration", "guess": "unsure", "model_score": 0.4445, "style_score": 0.0, "combined_score": 0.2389, "label": "not built yet", "status": "decided"}
+{"timestamp": "2026-11-02T15:11:39+00:00", "content_id": "c_f761b2827caf", "creator_id": "calibration", "guess": "unsure", "model_score": 0.4293, "style_score": 0.8588, "combined_score": 0.6441, "label": "not built yet", "status": "decided"}
+{"timestamp": "2026-11-02T15:11:39+00:00", "content_id": "c_9e22641564c0", "creator_id": "calibration", "guess": "unsure", "model_score": 0.5862, "style_score": 0.6335, "combined_score": 0.5956, "label": "not built yet", "status": "decided"}
+{"timestamp": "2026-11-02T15:11:39+00:00", "content_id": "c_2d7d4aaf16b1", "creator_id": "calibration", "guess": "unsure", "model_score": 0.9101, "style_score": 0.8589, "combined_score": 0.7038, "label": "not built yet", "status": "decided"}
