@@ -80,6 +80,14 @@ each label proves "unsure" is a working buffer, not dead code — and the
 borderline set is what's meant to land there, so "unsure" isn't only reached
 through misclassified clear cases.
 
+> **Revised in unit 7 (2026-11-02, Milestone 4):** The unsure band is
+> 0.35–0.75, not 0.35–0.80. The targets are unchanged: a mean gap of at least
+> 0.40, and at least 4 of each label.
+>
+> **Why revised:** `AI_THRESHOLD` moved from 0.80 to 0.75 in Milestone 4. At
+> 0.80 the clearly-AI calibration sample (combined 0.763) could never be
+> labelled AI, so the "why" above described a band the code no longer uses.
+
 ---
 
 ## 3. Every appeal changes status and is recorded
@@ -145,6 +153,15 @@ what the first misses. If signal two never changes a label, the service is a
 single-model detector with that model's blind spots — like calling plain human
 writing AI. 0.10 is the smallest shift that can move a score across a threshold
 often enough to matter.
+
+> **Revised in unit 7 (2026-11-02, Milestone 4):** "The same thresholds" means
+> below 0.35 → human, **0.75** or above → AI, otherwise unsure. Still at least
+> 5 changed labels and a mean shift of at least 0.10.
+>
+> **Why revised:** `AI_THRESHOLD` moved from 0.80 to 0.75 in Milestone 4.
+> Checked against 0.80, signal one alone would be judged on a cut-off the
+> service never applies, so the count of changed labels wouldn't measure what
+> signal two actually does.
 
 ---
 
