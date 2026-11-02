@@ -39,13 +39,28 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
-1. A writer sends their text. It goes to POST /submit as JSON: {"text": "...", "creator_id": "..."}.
-2. The route checks it. app.py::submit rejects text that's missing, empty or enormous (400) and gives the submission a content_id.
-3. Signal one reads it. detector.model_signal runs a small language model (gpt2) on your laptop to measure how predictable the text is. That becomes model_score (0 = human-ish, 1 = AI-ish).
-4. Signal two measures its shape. stylometry.style_signal looks at variation in sentence length, word variety and punctuation, which gives style_score (0–1).
-5. The scores are combined. scoring.combine_signals turns the two scores into one combined score.
-6. The score becomes words. scoring.score_to_label maps the combined score to a guess (human / unsure / ai) and a plain-English sentence.
-7. It's logged and returned. audit.log_decision writes everything to logs/audit.jsonl with status decided. The writer gets back the label, both scores and the content_id, which they need to appeal (POST /appeal → status under_review).
+1. **A writer sends their text.** It goes to `POST /submit` as JSON:
+   `{"text": "...", "creator_id": "..."}`.
+2. **The route checks it.** `app.py::submit` turns away missing or empty
+   `text` or `creator_id`, text over 5,000 characters and text too short to
+   score, each with a 400 and an error code, and logs the rejection. Accepted
+   text gets a `content_id`.
+3. **Signal one reads it.** `detector.py::model_signal` runs a small language
+   model (gpt2) locally to measure how predictable the text is. That becomes
+   `model_score` (0 = human-like, 1 = AI-like).
+4. **Signal two measures its shape.** `stylometry.py::style_signal` scores
+   sentence-length variation and punctuation, giving `style_score` (0–1).
+5. **The scores are combined.** `scoring.py::combine_signals` averages them
+   50/50 and pulls short texts (under 100 words) toward 0.5, giving
+   `combined_score`.
+6. **The score becomes words.** `scoring.py::score_to_label` maps it to a guess
+   (`human` below 0.35, `ai` at 0.75 and up, `unsure` between) and a
+   plain-English sentence.
+7. **It's logged and returned.** `audit.log_decision` writes all three scores,
+   the guess and the label to `logs/audit.jsonl` with status `decided`. The
+   writer gets the label, the scores and the `content_id`, which they need to
+   appeal: `POST /appeal` logs their reasoning beside the decision and moves
+   it to `under_review`.
 
 ---
 
@@ -307,17 +322,41 @@ $ curl -X POST http://127.0.0.1:5000/appeal \
 
 ## How I Used AI
 
-**Moment 1**
+**Moment 1: checking my acceptance criteria**
 
-- _What I asked for:_
-- _What came back:_
-- _What I changed:_
+- _What I asked for:_ I pasted my five criteria into Claude and asked how they
+  held up, then asked it to refine them.
+- _What came back:_ It found that several contradicted my own Milestone 1
+  contract. Criterion 2 used `confidence` where it meant `combined_score`,
+  criterion 4 said 50,000 characters where my contract says 5,000, and
+  criterion 5 ("modify Signal 2's features by ≥40%") couldn't be checked from
+  outside the code. None of them said the target had to hold across all three
+  trials.
+- _What I changed:_ I kept my original targets (at most 1 of 20, a 0.40 gap,
+  10 of 10 appeals, a 0.10 shift) and had the wording fixed to match the
+  contract and say exactly what a checker sends and looks at. I asked whether
+  to shrink the sample counts to fit the 2 samples the starter ships with, and
+  decided to keep them, because 1 of 10 would quietly double my allowed
+  false-positive rate.
 
-**Moment 2**
+**Moment 2: choosing the combining rule**
 
-- _What I asked for:_
-- _What came back:_
-- _What I changed:_
+- _What I asked for:_ Help building signal two and a table of both signals
+  over the calibration inputs, including the plain second-language paragraph
+  from Milestone 1.
+- _What came back:_ The plain human paragraph scored *more* AI-like than the
+  real AI text on both signals (0.91 vs 0.75, and 0.86 vs 0.82), so no
+  weighting could separate them. It also showed type-token ratio running
+  backwards. It gave me three rules with their scores: a plain average with AI
+  at 0.80 (the plain writer gets labelled AI), the average with AI only at 0.90
+  (almost nothing gets labelled AI), or the average pulled toward unsure for
+  short texts.
+- _What I changed:_ I picked the short-text rule. That meant lowering the AI
+  threshold from 0.80 to 0.75 so the clearly-AI sample could still be
+  labelled AI. Because that broke the numbers in criteria 2 and 5, I added
+  dated revision notes under them instead of editing the originals. I also
+  wrote down what the rule doesn't fix: a plain writer who submits 150 words
+  still gets no protection.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
