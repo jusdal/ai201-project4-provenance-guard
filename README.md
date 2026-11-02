@@ -358,6 +358,24 @@ $ curl -X POST http://127.0.0.1:5000/appeal \
   wrote down what the rule doesn't fix: a plain writer who submits 150 words
   still gets no protection.
 
+## Stretch Features
+
+**Declared before building (2026-11-02): `GET /content/<id>`.**
+
+What it will do: return one item's current status, so a writer who appealed
+can check where it stands without reading the whole log.
+
+The planned contract:
+
+- `GET /content/<content_id>` → `200` with `content_id`, `status` (from the
+  item's latest log entry: `decided` or `under_review`), the original
+  `guess`, `label` and the three scores, `submitted_at`, and `appeals`
+  (how many have been filed).
+- Unknown `content_id` → `404` with `{"error": "not_found", "message": ...}`.
+- Read-only: it never writes to the log.
+
+The request and response it returns will go here once it's built.
+
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
 ---
