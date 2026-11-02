@@ -80,12 +80,33 @@ def score_to_label(score: float) -> tuple[str, str]:
     think if they got it on their own work. That question is the whole
     milestone.
     """
-    # TODO: replace this — thresholds are in config.py
+    # Every label describes the text, never the person, and the two that
+    # aren't "human" say how to ask for a review. See notes/milestone1.md.
     if score >= config.AI_THRESHOLD:
-        return "ai", "PLACEHOLDER — write the high-confidence AI label."
-    if score <= config.HUMAN_THRESHOLD:
-        return "human", "PLACEHOLDER — write the high-confidence human label."
-    return "unsure", "PLACEHOLDER — write the unsure label."
+        return "ai", LABEL_AI
+    if score < config.HUMAN_THRESHOLD:
+        return "human", LABEL_HUMAN
+    return "unsure", LABEL_UNSURE
+
+
+LABEL_HUMAN = (
+    "This reads like writing by a person. We didn't find the patterns we "
+    "usually see in text from AI tools."
+)
+
+LABEL_UNSURE = (
+    "We can't tell whether this was written by a person or with an AI tool. "
+    "Lots of people's own writing lands here, so this isn't a finding against "
+    "the work. If you wrote it and want a person to take a look, you can ask "
+    "for a review."
+)
+
+LABEL_AI = (
+    "This text has strong patterns we usually see in writing from AI tools. "
+    "Our check can be wrong, especially on plain or simple writing. If you "
+    "wrote this yourself, ask for a review and a person will look at it. "
+    "Nothing changes until they do."
+)
 
 
 def label_ranges() -> list[tuple[str, str]]:

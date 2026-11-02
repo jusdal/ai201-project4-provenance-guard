@@ -172,17 +172,26 @@ threshold by only 0.013.
 
      Write them for someone who has never heard the word "threshold". -->
 
-| Label                 | Score range | The exact text a reader sees |
-| --------------------- | ----------- | ---------------------------- |
-| high-confidence human |             |                              |
-| unsure                |             |                              |
-| high-confidence AI    |             |                              |
+| Label | Score range | The exact text a reader sees |
+| --- | --- | --- |
+| high-confidence human | 0.00 – under 0.35 | This reads like writing by a person. We didn't find the patterns we usually see in text from AI tools. |
+| unsure | 0.35 – under 0.75 | We can't tell whether this was written by a person or with an AI tool. Lots of people's own writing lands here, so this isn't a finding against the work. If you wrote it and want a person to take a look, you can ask for a review. |
+| high-confidence AI | 0.75 – 1.00 | This text has strong patterns we usually see in writing from AI tools. Our check can be wrong, especially on plain or simple writing. If you wrote this yourself, ask for a review and a person will look at it. Nothing changes until they do. |
+
+The text lives in `scoring.py` (`LABEL_HUMAN`, `LABEL_UNSURE`, `LABEL_AI`);
+`scoring.py::score_to_label` picks one. Every score from 0 to 1 maps to exactly
+one label. Each was reached through `POST /submit`: clearly human (0.239 →
+human), formal human (0.644 → unsure), clearly AI (0.763 → AI).
 
 **Why I worded the "unsure" one this way:**
 
-<!-- It's the hardest of the three. It has to admit uncertainty without
-     sounding like an accusation, because the person reading it may well have
-     written every word themselves. -->
+It says what the system can't do ("we can't tell") instead of what the writer
+might have done. It talks about "the work", never "you", because the person
+reading it may well have written every word. "Lots of people's own writing
+lands here" is true on my calibration set (formal human writing and the plain
+second-language paragraph both landed here), and it tells the writer they're
+not being singled out. The review is offered, not demanded: unsure is not an
+accusation, so it shouldn't read like one.
 
 ---
 
@@ -191,31 +200,76 @@ threshold by only 0.013.
 <!-- One submission and one appeal, pasted as text: the request, the response,
      and the log entries. -->
 
-**A submission**
-
-<!-- The response needs content_id, guess, confidence, label, AND both
-     signal scores - model_score and style_score. Unit 8's tools read those
-     two off the response, so leaving them out costs you next unit's
-     diagnostics. -->
-
-_Milestone 3: signal one only. `guess`, `confidence` and `label` are
-placeholders until Milestones 4 and 5; `style_score` is `null` until signal two
-exists._
+**A submission** (the clearly-AI sample, labelled AI)
 
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d @samples/clearly_human.json
+  -d @samples/clearly_ai.json
 ```
 
 ```json
 {
-  "confidence": 0.0,
-  "content_id": "c_9b5d21b6af4d",
-  "guess": "unsure",
-  "label": "not built yet",
-  "model_score": 0.4445,
-  "style_score": null
+  "combined_score": 0.763,
+  "confidence": 0.526,
+  "content_id": "c_09e022f93384",
+  "guess": "ai",
+  "label": "This text has strong patterns we usually see in writing from AI tools. Our check can be wrong, especially on plain or simple writing. If you wrote this yourself, ask for a review and a person will look at it. Nothing changes until they do.",
+  "model_score": 0.7544,
+  "style_score": 0.8173
+}
+```
+
+**An appeal**
+
+```bash
+$ curl -X POST http://127.0.0.1:5000/appeal \
+  -H "Content-Type: application/json" \
+  -d '{"content_id": "c_09e022f93384", "reasoning": "I wrote this for a work newsletter. I write formally because that is what my manager asks for."}'
+```
+
+```json
+{
+  "content_id": "c_09e022f93384",
+  "message": "Thanks. A person will review this decision. Nothing about your submission changes until they do.",
+  "status": "under_review"
+}
+```
+
+**What the log shows afterwards**
+
+The original decision is still there, unchanged, and the appeal sits right
+after it with status `under_review`. Its `creator_id` comes from the original
+decision, not from the appeal request.
+
+```bash
+$ curl "http://127.0.0.1:5000/log?limit=2"
+```
+
+```json
+{
+  "count": 2,
+  "entries": [
+    {
+      "combined_score": 0.763,
+      "content_id": "c_09e022f93384",
+      "creator_id": "demo_instructor",
+      "guess": "ai",
+      "label": "This text has strong patterns we usually see in writing from AI tools. Our check can be wrong, especially on plain or simple writing. If you wrote this yourself, ask for a review and a person will look at it. Nothing changes until they do.",
+      "model_score": 0.7544,
+      "status": "decided",
+      "style_score": 0.8173,
+      "timestamp": "2026-11-02T15:17:20+00:00"
+    },
+    {
+      "content_id": "c_09e022f93384",
+      "creator_id": "demo_instructor",
+      "event": "appeal",
+      "reasoning": "I wrote this for a work newsletter. I write formally because that is what my manager asks for.",
+      "status": "under_review",
+      "timestamp": "2026-11-02T15:17:20+00:00"
+    }
+  ]
 }
 ```
 
@@ -234,45 +288,18 @@ $ curl -X POST http://127.0.0.1:5000/submit \
 }
 ```
 
-**An appeal**
+**An appeal for a content_id that doesn't exist**
 
 ```bash
 $ curl -X POST http://127.0.0.1:5000/appeal \
   -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
-```
-
-```json
-
-```
-
-**What the log shows afterwards**
-
-_Milestone 3: the decision for the submission above, and the rejection._
-
-```bash
-$ curl "http://127.0.0.1:5000/log?limit=3"
+  -d '{"content_id": "c_doesnotexist"}'
 ```
 
 ```json
 {
-  "timestamp": "2026-11-02T15:01:01+00:00",
-  "content_id": "c_9b5d21b6af4d",
-  "creator_id": "demo_instructor",
-  "guess": "unsure",
-  "model_score": 0.4445,
-  "style_score": null,
-  "combined_score": null,
-  "label": "not built yet",
-  "status": "decided"
-}
-{
-  "creator_id": "u1",
-  "event": "rejected",
-  "reason": "too_long",
-  "status": "rejected",
-  "text_length": 5001,
-  "timestamp": "2026-11-02T15:01:01+00:00"
+  "error": "not_found",
+  "message": "No submission with content_id 'c_doesnotexist'."
 }
 ```
 

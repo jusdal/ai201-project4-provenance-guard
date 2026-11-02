@@ -267,9 +267,7 @@ def submit():
     # How far from a coin flip: 0 = no idea, 1 = as sure as the system gets.
     confidence = round(abs(combined_score - 0.5) * 2, 4)
 
-    # Placeholders until Milestone 5 builds the label.
-    guess = "unsure"
-    label = "not built yet"
+    guess, label = scoring.score_to_label(combined_score)
 
     # Step 4 - log the decision. The content_id is what /appeal needs later.
     content_id = f"c_{uuid.uuid4().hex[:12]}"
@@ -313,7 +311,7 @@ def _reject(status, error, reason, creator_id, text, message):
 @app.post("/appeal")
 def appeal():
     """
-    A writer says you got it wrong. ← TODO — Milestone 5
+    A writer says you got it wrong.
 
     Expects JSON:
         {"content_id": "...", "reasoning": "..."}
@@ -330,18 +328,65 @@ def appeal():
     to the person on the other end. It's the only thing standing between a
     wrong accusation and nothing at all.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning", "")
 
-    # TODO: delete this and build the route.
+    if not isinstance(content_id, str) or not content_id.strip():
+        return (
+            jsonify({"error": "bad_request", "message": "Send JSON with a content_id."}),
+            400,
+        )
+    # Reasoning is optional: an empty appeal still gets recorded and reviewed.
+    if reasoning is None:
+        reasoning = ""
+    if not isinstance(reasoning, str) or len(reasoning) > 2000:
+        return (
+            jsonify(
+                {
+                    "error": "bad_request",
+                    "message": "reasoning must be text of 2,000 characters or fewer.",
+                }
+            ),
+            400,
+        )
+
+    decisions = [
+        e for e in audit.entries_for(content_id) if e.get("status") == "decided"
+    ]
+    if not decisions:
+        return (
+            jsonify(
+                {
+                    "error": "not_found",
+                    "message": f"No submission with content_id {content_id!r}.",
+                }
+            ),
+            404,
+        )
+
+    # Whose work it was comes from the original decision, not the request —
+    # the request can claim anything.
+    audit.log_appeal(
+        content_id=content_id,
+        creator_id=decisions[0]["creator_id"],
+        reasoning=reasoning,
+    )
+
     return (
         jsonify(
             {
-                "error": "not_implemented",
-                "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-                "you_sent": payload,
+                "content_id": content_id,
+                "status": "under_review",
+                "message": (
+                    "Thanks. A person will review this decision. Nothing about "
+                    "your submission changes until they do."
+                ),
             }
         ),
-        501,
+        200,
     )
 
 
