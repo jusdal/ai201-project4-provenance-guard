@@ -363,6 +363,61 @@ $ curl -X POST http://127.0.0.1:5000/appeal \
   wrote down what the rule doesn't fix: a plain writer who submits 150 words
   still gets no protection.
 
+**Unit 8.** I used Claude Code in VS Code for the test unit. Four moments:
+
+**Moment 3: building the test inputs for my criteria**
+
+- _What I asked for:_ Help filling in `scenarios.py` with what each of my
+  five criteria needs.
+- _What came back:_ It found that criteria 1 and 2 pointed at `samples/` files
+  holding one piece each, not 20, 15 and 6. It wrote the 15 AI pieces and the
+  borderline set (labelled in the file as written by Claude), and the
+  malformed request bodies. It flagged that criterion 4's not-JSON case can't
+  be sent by `run_eval.py`, and that two of the bad requests would share one
+  rate-limit bucket.
+- _What I changed:_ The human pieces had to be my own writing, so I supplied 19
+  pieces from my graduate coursework and kept them in `samples/my_writing/`,
+  not inside the code. Before committing them to a public repo I had Claude
+  remove personal details: my hometown, years, my university, and classmates'
+  and a guest speaker's names. I added dated revision
+  notes under criteria 1 and 2 instead of editing them.
+
+**Moment 4: running and scoring the criteria**
+
+- _What I asked for:_ The verdicts, and a way to test the appeal criterion.
+- _What came back:_ It wrote `run_appeals.py`, because `run_eval.py` never
+  calls `/appeal`. It noticed `run_eval.py` doesn't record `combined_score`,
+  so it recomputed the score with my own `combine_signals` and checked every
+  value against the recorded `confidence` and `guess`. It also predicted that
+  criterion 4 would get a 429 before validation, and it did.
+- _What I changed:_ It started gathering excerpts for the README's verdicts. I
+  pointed out that Milestone 4 is about my own criteria, so the verdicts went
+  under each criterion in `criteria.md` first. When it checked its own numbers it caught two of
+  its mistakes ("4 of 20" was really 5, and a wrong description of EV03)
+  before committing.
+
+**Moment 5: choosing the one improvement**
+
+- _What I asked for:_ A fix for what the diagnosis pointed at.
+- _What came back:_ Before changing any code, it replayed my recorded signal
+  one scores under five candidate changes and showed what each would do to
+  the criteria and the attack set. The replay's predictions then matched the
+  real after runs exactly.
+- _What I changed:_ I chose the spread scale (0.90 → 0.60) over raising the AI
+  threshold to 0.80. The threshold ended all three false accusations in the
+  replay, but it didn't touch either criterion, and it wasn't the cause the
+  diagnosis named. I kept the cost in the write-up: two evasions now read as
+  "human".
+
+**Moment 6: a run that wasn't clean**
+
+- _What came back:_ The first after run of my criteria got extra 429s on
+  criterion 4. Claude traced it to the run starting within a minute of the
+  attack run, which had filled the per-address limit.
+- _What I changed:_ I kept that run as evidence, marked it superseded, and
+  re-ran with the same spacing as the before run. I didn't report the worse
+  numbers as a result of the change.
+
 ## Stretch Features
 
 **Declared before building (2026-11-02): `GET /content/<id>`.**
@@ -922,7 +977,8 @@ service, 56 attacks on 2026-11-09. Full report:
 [results/attack_run_2026-11-09_1608_after.md](results/attack_run_2026-11-09_1608_after.md).
 
 **43 held, 13 broke** (before: 42 held, 14 broke). Nothing crashed and nothing
-returned a 5xx.
+returned a 5xx. The audit log for just this run is in
+[results/audit_run_2026-11-09_1608_after.jsonl](results/audit_run_2026-11-09_1608_after.jsonl).
 
 | Family | Before held / broke | After held / broke |
 |---|---|---|
@@ -1047,13 +1103,109 @@ evasions worse.
 
 ## What's Still Broken
 
-<!-- For each attack still getting through and each criterion still missed:
-     what you'd do, and why you stopped. -->
+After the improvement, 13 attacks still get through and 3 criteria are still
+missed. They're grouped by the problem behind them, from the Diagnoses above.
+Where I say what a fix would do, the numbers come from replaying the recorded
+signal one scores, the same way I picked the improvement. I didn't build these.
 
-**The trade I'd make if this ran for real:**
+**Two writers still accused: FP02 and FP03** (0.758 and 0.754, just over the
+0.75 line). *Problem 1: both signals read plain writing as AI.*
 
-<!-- Two sentences. Fewer wrong accusations means more AI text getting through.
-     Say which way you'd go and WHO PAYS FOR IT. -->
+- **Why the improvement missed them:** their sentence spreads (0.24 and 0.33)
+  sit near the AI end of the scale. Moving the human end to 0.60 barely changes
+  them, and both of them use no punctuation beyond full stops and commas.
+- **What I'd do:** stop the two signals counting one blind spot twice. Either
+  measure punctuation by variety rather than by count, so "only full stops and
+  commas" stops reading as strong evidence, or raise `FULL_CONFIDENCE_WORDS`
+  from 100 to 150, so short plain texts (these are 70–83 words) get more pull
+  toward unsure.
+- **What the replay says about the second option:** both writers go to unsure
+  and no false-positive attack is accused. But every evasion gets through,
+  2 more clearly-AI eval pieces drop to unsure, and criterion 2's gap falls
+  to 0.273.
+- **Why I stopped:** Milestone 5 was one change, and the punctuation rewrite
+  is a new measure, which needs its own calibration and its own re-run.
+
+**Seven evasions, two of them now labelled "human": EV02 and EV05, plus EV01,
+EV03, EV06, EV07 and EV09.** *Problem 2: signal two's measures max out cheaply.
+Problem 4: one-off cases.*
+
+- **EV02, EV03, EV06, EV07** reshape AI text to max out signal two.
+  - The 0.60 change made EV02 worse: it now lands at 0.347, a "human" label.
+  - What I'd do: stop treating degenerate shapes as human. One-word
+    "sentences", a single sentence the length of a paragraph, and more than
+    about 6 marks per 100 words would count as no evidence (0.5) instead of
+    human (0.0).
+  - Why I stopped: this is a rule written against four known attacks. I'd
+    want new attacks to test it, or I'd only be fitting the attack set.
+- **EV05**, the heavy human edit, is now labelled "human".
+  - What I'd do: nothing. A person rewrote it, the model score is 0.32, and
+    calling it `ai` would also accuse writers who edit their own drafts hard.
+  - I'd leave it broken on purpose.
+- **EV09**, a human paragraph bolted onto AI text, is at 0.6515.
+  - What I'd do: score each paragraph separately and label the document by
+    its most AI-like paragraph, not by the whole-text average.
+  - Why I stopped: that turns one score per document into several, which
+    changes the response, the log, and what the label is allowed to say.
+- **EV01**, typos.
+  - The typos fool signal one, not signal two.
+  - What I'd do: spell-correct before computing perplexity.
+  - Why I stopped: that adds a dependency and a new way to be wrong about
+    non-native spelling, the same writers criterion 1 protects.
+
+**Four junk inputs scored as writing: MF03, MF04, MF05, MF06.** *Problem 3: the
+route accepts text with no words.*
+
+- **What I'd do:** reject before scoring when `stylometry.words(text)` finds
+  fewer than 3 words, or when under half of the text's characters are letters.
+  It would return 400 `text_too_short` with a message saying it found no
+  writing to check.
+- **Why I stopped:** only because Milestone 5 allowed one change. This is the
+  cheapest fix left and has no trade on the scoring side. I'd do it next.
+
+**Criterion 2 still missed** (gap 0.363, target 0.40; coverage now passes).
+
+- The human mean fell from 0.574 to 0.491, but the AI mean also fell, from
+  0.885 to 0.854.
+- To close the gap, my writing needs to score lower on signal one. gpt2 still
+  gives my academic prose 0.47 at the lowest.
+- **What I'd do:** recalibrate signal one's midpoint (perplexity 45 maps to
+  0.5) against more than five calibration texts.
+- **Why I stopped:** one change. Moving signal one would also move every
+  number I've measured so far, so it needs its own before and after.
+
+**Criterion 4 still missed** (26 of 27; one 429).
+
+- **What I'd do:** let a malformed request skip the rate limit. Flask-Limiter's
+  `exempt_when` can skip the limit when the body has no usable `text` or
+  `creator_id`, so the route rejects it with a 400.
+- **What it costs:** a flood of malformed requests is no longer limited. Those
+  requests never reach the model, so they're cheap to answer, and they're still
+  logged as rejections. Hitting it would also show how the route handles
+  RQ10's and RQ11's bodies, which have never been tested.
+- **Why I stopped:** one change, and it isn't about scoring, which was the
+  bigger problem.
+
+**Criterion 5 still missed** (shift 0.088, target 0.10; the label count now
+passes).
+
+- The two signals still correlate, because both reward even sentences and plain
+  punctuation, so their average stays close to either one.
+- The punctuation-variety change above is the one most likely to separate
+  them.
+- A caution from criterion 5's verdict: raising `FULL_CONFIDENCE_WORDS`
+  would "pass" this criterion (shift 0.114 in the replay) for the wrong
+  reason. The criterion counts the short-text pull as if it were signal two.
+- **Why I stopped:** one change.
+
+**The trade I'd make if this ran for real:** I'd go further toward fewer wrong
+accusations. I'd raise the AI line from 0.75 to 0.80: in my replay that leaves
+none of the 8 human attack texts accused, and still flags 12 of 15 clearly-AI
+eval pieces, while every one of the 9 judged evasion attacks gets through. The
+site and its readers pay for that, in AI-written work that goes unflagged and
+in honest writers competing against it. I'd rather they pay than a
+second-language writer, who would get an accusation they're the least able to
+argue against.
 
 <!-- ═════════════════════════════════════════════════════════════════════
 
