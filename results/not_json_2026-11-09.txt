@@ -1,0 +1,51 @@
+HTTP/1.1 400 BAD REQUEST
+Server: Werkzeug/3.1.9 Python/3.13.15
+Date: Mon, 09 Nov 2026 08:43:33 GMT
+Content-Type: application/json
+Content-Length: 78
+Connection: close
+
+{
+  "error": "bad_request",
+  "message": "Send JSON with a non-empty text."
+}
+
+---
+HTTP/1.1 400 BAD REQUEST
+Server: Werkzeug/3.1.9 Python/3.13.15
+Date: Mon, 09 Nov 2026 08:43:33 GMT
+Content-Type: application/json
+Content-Length: 78
+Connection: close
+
+{
+  "error": "bad_request",
+  "message": "Send JSON with a non-empty text."
+}
+
+---
+HTTP/1.1 400 BAD REQUEST
+Server: Werkzeug/3.1.9 Python/3.13.15
+Date: Mon, 09 Nov 2026 08:43:33 GMT
+Content-Type: application/json
+Content-Length: 78
+Connection: close
+
+{
+  "error": "bad_request",
+  "message": "Send JSON with a non-empty text."
+}
+
+---
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.9 Python/3.13.15
+Date: Mon, 09 Nov 2026 08:45:16 GMT
+Content-Type: application/json
+Content-Length: 95
+Connection: close
+
+{
+  "ok": true,
+  "service": "provenance-guard",
+  "you_sent": "still alive after bad input"
+}

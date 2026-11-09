@@ -57,6 +57,16 @@ fall into "unsure". The plain-writer paragraph is in the set on purpose: it's
 the input both of my signals are weakest on, so a criterion without it would be
 too easy.
 
+> **Revised in unit 8 (2026-11-09, Milestone 3):** The 20 pieces are the
+> second-language paragraph plus 19 pieces I wrote myself, one per file in
+> `samples/my_writing/` (loaded by `scenarios.py::MY_WRITING`). The target is unchanged: at most 1 `guess: "ai"` in each of 3
+> trials. Criterion 2's 15 human pieces are the first 15 of that list.
+>
+> **Why revised:** `samples/clearly_human.json` holds one piece, the
+> instructor's demo text, not 20. So the original line pointed at a test set
+> that didn't exist and couldn't be measured. Someone else's prose also can't
+> show whether *my* writing gets wrongly flagged.
+
 ---
 
 ## 2. Scores spread apart, and all three labels are reachable

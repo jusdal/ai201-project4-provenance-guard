@@ -1,0 +1,26 @@
+# One pass of criterion 4's malformed bodies (scenarios.py), to record the error bodies run_eval.py doesn't save
+
+sent: {"creator_id": "eval_bad_missing_text"}
+  -> 400 {"error": "bad_request", "message": "Send JSON with a non-empty text."}
+
+sent: {"text": "I didn't sleep. Not properly, anyway \u2014 I lay there listening to the boiler …
+  -> 400 {"error": "bad_request", "message": "Send JSON with a non-empty creator_id."}
+
+sent: {"text": "", "creator_id": "eval_bad_empty"}
+  -> 400 {"error": "bad_request", "message": "Send JSON with a non-empty text."}
+
+sent: {"text": "   \n\t  ", "creator_id": "eval_bad_whitespace"}
+  -> 400 {"error": "bad_request", "message": "Send JSON with a non-empty text."}
+
+sent: {"text": "I didn't sleep. Not properly, anyway \u2014 I lay there listening to the boiler …
+  -> 400 {"error": "bad_request", "message": "Send JSON with a non-empty creator_id."}
+
+sent: {"text": 123, "creator_id": "eval_bad_not_string"}
+  -> 400 {"error": "bad_request", "message": "Send JSON with a non-empty text."}
+
+sent: {"text": "Hi.", "creator_id": "eval_bad_too_short"}
+  -> 400 {"error": "text_too_short", "message": "Text is too short to score \u2014 a few sentences at least."}
+
+sent: {"text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…
+  -> 400 {"error": "text_too_long", "message": "Text is over 5,000 characters."}
+
