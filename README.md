@@ -442,7 +442,7 @@ $ curl http://127.0.0.1:5000/content/c_doesnotexist
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 5 per minute, 50 per day
 
 **Why those numbers and not others:**
 
@@ -451,16 +451,49 @@ $ curl http://127.0.0.1:5000/content/c_doesnotexist
      thresholds. Your numbers have to be liveable for the first and hostile to
      the second. -->
 
+A real writer submits their own work a few times an hour at most, so 5 a
+minute and 50 a day is far more than a person needs, even someone re-checking
+a draft after edits. A script trying to map my thresholds needs hundreds or
+thousands of variations. At 5 a minute that takes hours, and the 50-a-day cap
+means a thousand variations would take 20 days from one identity.
+
 **What a caller counts as:** <!-- per address, or per creator_id? They fail
 differently — one script can look like a thousand callers, and one household
 can look like one. -->
+
+Per `creator_id`, taken from the request body (`app.py::rate_limit_key`). If a
+request has no usable `creator_id`, it falls back to the caller's IP address.
+People sharing one network (a household, a school) don't use up each other's
+limit. The weakness: `creator_id` is whatever the caller sends, so a script
+that picks a new `creator_id` for every request never hits the limit at all.
 
 **The run of status codes when I pushed past it:**
 
 <!-- python run_attacks.py --flood 15 -->
 
 ```
+15 submissions as 'flood_tester' against http://127.0.0.1:5000
+The first one is slow while the model loads.
 
+[ 1/15] 200
+[ 2/15] 200
+[ 3/15] 200
+[ 4/15] 200
+[ 5/15] 200
+[ 6/15] 429
+[ 7/15] 429
+[ 8/15] 429
+[ 9/15] 429
+[10/15] 429
+[11/15] 429
+[12/15] 429
+[13/15] 429
+[14/15] 429
+[15/15] 429
+
+============================================================
+200 200 200 200 200 429 429 429 429 429 429 429 429 429 429
+============================================================
 ```
 
 ---
