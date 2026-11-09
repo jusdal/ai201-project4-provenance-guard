@@ -94,7 +94,8 @@ words reads as human even when an AI wrote it.
 (`stylometry.py::style_signal`). Two measures go into the score:
 
 - **Sentence-length spread:** standard deviation of words per sentence divided
-  by the mean. 0.20 or less maps to 1.0 (AI); 0.90 or more maps to 0.0 (human).
+  by the mean. 0.20 or less maps to 1.0 (AI); 0.60 or more maps to 0.0 (human).
+  (0.90 until unit 8, Milestone 5; see The Improvement.)
 - **Punctuation density:** dashes, semicolons, colons, brackets, quotes, `!` and
   `?` per 100 words, not counting full stops and commas, which everyone uses.
   0 maps to 1.0 (AI); 4 or more maps to 0.0 (human).
@@ -177,6 +178,10 @@ rather than being accused.
 length. A plain writer who submits 150 words gets no pull toward unsure and
 would score about 0.88, which is "AI". The clearly-AI sample also clears the AI
 threshold by only 0.013.
+
+> **Unit 8 note:** the table above is the unit 7 calibration. After the
+> Milestone 5 change to signal two's spread scale, the clearly-AI sample scores
+> 0.700 (style 0.680) and is labelled unsure, not AI. See The Improvement.
 
 ---
 
@@ -839,18 +844,204 @@ evasion easier: recalibrate signal two so it stops treating plainness as AI.
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** one number in signal two. The sentence-length spread now
+reads fully human at **0.60** instead of **0.90**. Spreads of 0.20 or less
+still read fully AI (`stylometry.py::style_signal`, `human_at=0.90` →
+`human_at=0.60`). Nothing else changed: same signal one, same 0.6 / 0.4 mix
+inside signal two, same 50/50 combining rule, same thresholds.
 
-**Which diagnosis pointed at it:**
+**Which diagnosis pointed at it:** problem 1 in the Diagnoses above. Both
+signals score plain, even writing as AI, and the part of signal two most out of
+line is the spread scale. I set its human end from one choppy fiction
+paragraph, so real expository prose (my writing spreads 0.34–0.62) could only
+ever read as AI-leaning. That's what kept "human" out of reach in criterion 2
+and kept signal two agreeing with signal one in criterion 5. It's also part of
+why FP02, FP03 and FP05 were accused.
+
+**How I chose 0.60:** signal one is deterministic, so I replayed the recorded
+`model_score`s from the before runs and recomputed only signal two under each
+candidate change:
+
+| Candidate | False accusations | "human" labels / 36 | Labels changed (C5) |
+|---|---|---|---|
+| spread human end 0.70 | 2/8 | 2 | 8 |
+| spread human end 0.60 | 2/8 | 4 | 10 |
+| AI threshold 0.80 | 0/8 | 0 | 4 |
+| signal weights 0.6 model / 0.4 style | 2/8 | 0 | 4 |
+
+The AI threshold at 0.80 ended all three false accusations, but it moved
+neither criterion, and it was the widening I had already backed out of in
+unit 7. 0.60 was the only option that attacked the diagnosed cause. The
+replay's predictions matched the real after runs exactly.
+
+### Five criteria — before and after
+
+Before: commit `2ee36b2`,
+[results/run_2026-11-09_1539_before.md](results/run_2026-11-09_1539_before.md).
+After: [results/run_2026-11-09_1611_after_spaced.md](results/run_2026-11-09_1611_after_spaced.md)
+and [results/appeals_2026-11-09_1608_after.md](results/appeals_2026-11-09_1608_after.md).
+Three trials each. Every trial was identical within each set.
+
+| Criterion | Target | Before (×3) | After (×3) | Verdict before → after |
+|---|---|---|---|---|
+| 1. My own writing labelled AI | ≤ 1 of 20 | 0/20 (20 unsure) | 0/20 (16 unsure, **4 human**) | MET → MET |
+| 2. Spread and labels | gap ≥ 0.40, each label ≥ 4 | gap 0.311 · H/U/A 0/21/15 | gap **0.363** · H/U/A **4**/19/13 | MISSED → MISSED (coverage passes now) |
+| 3. Appeals | 10/10 + 404 | 10/10 · 404 | 10/10 · 404 | MET → MET |
+| 4. Bad input | 27/27 → 400 | 26/27 | 26/27 | MISSED → MISSED (not targeted) |
+| 5. Signal two changes outcomes | ≥ 5 labels, shift ≥ 0.10 | 4 · 0.060 | **10** · 0.088 | MISSED → MISSED (count passes now) |
+
+**Real output from the after run, trial 1** (`run_eval.py::main` →
+`app.py::submit`). The same piece as in the before log (04.txt) now
+reaches "human", because signal two fell from 0.3237 to 0.1166:
+
+```json
+{"status": 200, "guess": "human", "confidence": 0.4026, "model_score": 0.4807, "style_score": 0.1166, "sent": "GLOBALIZATION\n\nHistorically, anthropologists have studied places bound"}
+```
+
+And the cost, the clearly-AI calibration paragraph, which used to be labelled
+`ai` at 0.763:
+
+```json
+{"status": 200, "guess": "unsure", "confidence": 0.4, "model_score": 0.7544, "style_score": 0.6804, "sent": "The importance of effective time management cannot be overstated in to"}
+```
+
+One thing about running it. My first after run of the five criteria
+(`results/run_2026-11-09_1608_after.md`) started within a minute of the attack
+run. The attack run's requests with no `creator_id` had filled the
+per-address limit, so criterion 4's cases 2 and 5 got 429 in all three trials.
+The scores were identical, so I kept the file as evidence and re-ran it a
+minute later, spaced like the before run. The not-JSON requests hit the same
+wall the first time (`results/not_json_2026-11-09_after.txt` has both
+attempts). That's criterion 4's diagnosis showing up again, not something the
+change caused.
 
 ### Attack Run — After
 
-<!-- Same format. `run_attacks.py --label after` -->
+`python run_attacks.py --set attack_set --label after` against the changed
+service, 56 attacks on 2026-11-09. Full report:
+[results/attack_run_2026-11-09_1608_after.md](results/attack_run_2026-11-09_1608_after.md).
 
-**Did it help, and how do I know:**
+**43 held, 13 broke** (before: 42 held, 14 broke). Nothing crashed and nothing
+returned a 5xx.
 
-<!-- Widening the unsure band usually fixes one problem and creates another.
-     Reporting that trade honestly is worth full credit. -->
+| Family | Before held / broke | After held / broke |
+|---|---|---|
+| `evasion` | 3 / 7 | 3 / 7 |
+| `false_positive` | 5 / 3 | **6 / 2** |
+| `prompt_injection` | 6 / 0 | 6 / 0 |
+| `malformed` | 16 / 4 | 16 / 4 |
+| `flood_same_creator` | 12 / 0 | 12 / 0 |
+| **Total** | 42 / 14 | **43 / 13** |
+
+Same rules as the before run. Three rows changed:
+
+| Attack | Before | After |
+|---|---|---|
+| FP05, technical documentation by a person | **ai**, 0.757 | unsure, 0.740: **now held** |
+| EV02, AI text broken up with "Really." | unsure, 0.367 | **human**, 0.347 |
+| EV05, AI text after a heavy human edit | unsure, 0.415 | **human**, 0.336 |
+
+The audit entries behind those rows, plus FP03, which is still accused
+(label text cut for space):
+
+```json
+{"timestamp": "2026-11-09T09:08:22+00:00", "content_id": "c_1979885a5f8b", "creator_id": "attacker_FP05", "guess": "unsure", "model_score": 0.8005, "style_score": 0.8847, "combined_score": 0.7398, "status": "decided"}
+{"timestamp": "2026-11-09T09:08:21+00:00", "content_id": "c_a5078817c95d", "creator_id": "attacker_EV02", "guess": "human", "model_score": 0.5943, "style_score": 0.0703, "combined_score": 0.3474, "status": "decided"}
+{"timestamp": "2026-11-09T09:08:21+00:00", "content_id": "c_847c636d8a66", "creator_id": "attacker_EV05", "guess": "human", "model_score": 0.3212, "style_score": 0.2781, "combined_score": 0.3357, "status": "decided"}
+{"timestamp": "2026-11-09T09:08:22+00:00", "content_id": "c_aa38c380c834", "creator_id": "attacker_FP03", "guess": "ai", "model_score": 0.8051, "style_score": 0.8077, "combined_score": 0.7543, "status": "decided"}
+```
+
+| ID | Family | Targeting | Status | Content ID | Guess | Score | Verdict |
+|---|---|---|---|---|---|---|---|
+| EV01 | evasion | signal two: typos raise word variety | 200 | `c_91441d67b605` | unsure | 0.139 | BROKE: AI text, 0.5695 → unsure |
+| EV02 | evasion | signal two: broken-up sentences raise length spread | 200 | `c_a5078817c95d` | human | 0.305 | BROKE: AI text, 0.3474 → **human** (was unsure before) |
+| EV03 | evasion | signal two: a pasted quotation changes the shape | 200 | `c_53fee202273c` | unsure | 0.076 | BROKE: AI text, 0.4618 → unsure |
+| EV04 | evasion | signal one: unusual words raise perplexity | 200 | `c_3242d741d1bc` | ai | 0.526 | HELD: 0.7629 → ai |
+| EV05 | evasion | both signals: heavy human editing pass | 200 | `c_847c636d8a66` | human | 0.329 | BROKE: AI text, 0.3357 → **human** (was unsure before) |
+| EV06 | evasion | signal two: one very long sentence and one very short | 200 | `c_94beb7a891a2` | unsure | 0.025 | BROKE: AI text, 0.4874 → unsure |
+| EV07 | evasion | signal two: padding with punctuation | 200 | `c_5c6a4741e5bb` | unsure | 0.181 | BROKE: AI text, 0.5903 → unsure |
+| EV08 | evasion | signal one: text below the token window | 200 | `c_0d511464696e` | unsure | 0.012 | HELD: 10 words, 0.506 → unsure via length pull |
+| EV09 | evasion | both: AI text with a human opening paragraph bolted on | 200 | `c_bf70501ab174` | unsure | 0.303 | BROKE: AI text, 0.6515 → unsure |
+| EV10 | evasion | signal two: repeated stanza structure | 200 | `c_abe7a7f9527e` | ai | 0.537 | HELD: 0.7685 → ai |
+| FP01 | false_positive | plain, clear human writing with no flourishes | 200 | `c_14f5a3ecd9da` | unsure | 0.231 | HELD: Human, 0.6157 → unsure |
+| FP02 | false_positive | human writing in a formal register | 200 | `c_46b30f0cd7da` | ai | 0.515 | BROKE: Human writing, 0.7577 → **ai** |
+| FP03 | false_positive | a non-native English speaker writing carefully | 200 | `c_aa38c380c834` | ai | 0.509 | BROKE: Human writing, 0.7543 → **ai** |
+| FP04 | false_positive | a student essay written to a rubric | 200 | `c_cc73b9a5feeb` | unsure | 0.396 | HELD: Human, 0.6982 → unsure |
+| FP05 | false_positive | technical documentation written by a person | 200 | `c_1979885a5f8b` | unsure | 0.480 | HELD: Human, 0.7398 → unsure (was ai before) |
+| FP06 | false_positive | a person imitating a formal template | 200 | `c_4176c3903c04` | unsure | 0.258 | HELD: Human, 0.6288 → unsure |
+| FP07 | false_positive | human writing that repeats a phrase deliberately | 200 | `c_ba29f54ed929` | unsure | 0.166 | HELD: Human, 0.5831 → unsure |
+| FP08 | false_positive | very short genuine human submission | 200 | `c_d4a98cb61081` | unsure | 0.002 | HELD: Human, 0.4989 → unsure |
+| PI01 | prompt_injection | instruction to ignore the check | 200 | `c_a9a30d2772c5` | unsure | 0.062 | HELD: 0.4691 → unsure, not the human label it asked for. Text never read as instructions |
+| PI02 | prompt_injection | instruction disguised as a system message | 200 | `c_ad9813fac006` | unsure | 0.278 | HELD: 0.361 → unsure. Fake SYSTEM line ignored |
+| PI03 | prompt_injection | instruction wrapped in the writer's voice | 200 | `c_de787b8190b4` | unsure | 0.011 | HELD: 0.4944 → unsure |
+| PI04 | prompt_injection | attempt to make the label text hostile | 200 | `c_5bdf11e972ea` | unsure | 0.096 | HELD: Label is fixed text and submitted text isn't echoed or logged, so the script tag goes nowhere |
+| PI05 | prompt_injection | attempt to inject into the audit log | 200 | `c_94291ef64242` | unsure | 0.050 | HELD: Submitted text isn't written to the log, and entries are json.dumps'd, so no forged fields |
+| PI06 | prompt_injection | instruction plus real human text | 200 | `c_4cf124c03ce1` | unsure | 0.190 | HELD: 0.5951 → unsure. Instruction had no effect (human text still not labeled human) |
+| MF01 | malformed | text is only whitespace | 400 | `—` | — | — | HELD: 400 bad_text |
+| MF02 | malformed | text is a single character | 400 | `—` | — | — | HELD: 400 too_short |
+| MF03 | malformed | text is control characters | 200 | `c_f4761df56f38` | unsure | 0.000 | BROKE: Accepted ANSI control codes as writing: 200, content_id, a label |
+| MF04 | malformed | text is only punctuation | 200 | `c_0766ba29887c` | unsure | 0.000 | BROKE: Accepted punctuation-only as writing: 200, content_id, a label |
+| MF05 | malformed | text is a very long single word | 200 | `c_a6eac29a253a` | unsure | 0.010 | BROKE: Accepted one 300-char 'word': signal one 0.998, saved only by the length pull |
+| MF06 | malformed | text is emoji only | 200 | `c_bcc8879c1277` | unsure | 0.000 | BROKE: Accepted emoji-only: signal one 0.997, style 1.0, saved only by the length pull |
+| MF07 | malformed | text is right-to-left script | 200 | `c_c6458a060892` | unsure | 0.000 | HELD: 0.5 unsure, no crash. But signal one 0.906 on Arabic: a longer non-English text would be labeled ai |
+| MF08 | malformed | text is 60,000 characters | 400 | `—` | — | — | HELD: 400 too_long |
+| RQ01 | malformed | no text field at all | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ02 | malformed | no creator_id | 400 | `—` | — | — | HELD: 400 bad_creator_id |
+| RQ03 | malformed | text is a number | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ04 | malformed | text is a list | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ05 | malformed | text is null | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ06 | malformed | creator_id is an object | 400 | `—` | — | — | HELD: 400 bad_creator_id |
+| RQ07 | malformed | body is a JSON array, not an object | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ08 | malformed | body is unparseable JSON | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ09 | malformed | body is empty | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ10 | malformed | body is form-encoded, not JSON | 429 | `—` | — | — | HELD: 429. No creator_id, so it shared the IP bucket with RQ02/06–09 and never reached the route |
+| RQ11 | malformed | body is JSON claiming to be plain text | 429 | `—` | — | — | HELD: 429. Same as RQ10: the route's handling of a text/plain body is untested |
+| RQ12 | malformed | deeply nested JSON | 400 | `—` | — | — | HELD: 400 bad_text |
+| FL01_01 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_a435fc6964a4` | unsure | 0.003 | HELD: 200, within 5/min |
+| FL01_02 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_6742682911b5` | unsure | 0.003 | HELD: 200, within 5/min |
+| FL01_03 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_fba0b9bff06c` | unsure | 0.003 | HELD: 200, within 5/min |
+| FL01_04 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_de7b6565ed65` | unsure | 0.003 | HELD: 200, within 5/min |
+| FL01_05 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_76464b523c71` | unsure | 0.003 | HELD: 200, within 5/min |
+| FL01_06 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+| FL01_07 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+| FL01_08 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+| FL01_09 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+| FL01_10 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+| FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+| FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+
+**Did it help, and how do I know:** partly. It made "human" reachable and
+cut one false accusation. It fixed no criterion outright, and it made two
+evasions worse.
+
+- **What improved, measured:**
+  - "human" went from 0 to 4 of 36, so criterion 2's coverage part now passes.
+  - Labels changed by signal two went from 4 to 10, so criterion 5's count
+    part now passes.
+  - False accusations in the attack set went from 3 to 2 (FP05). My own
+    writing still gets no `ai` labels, and 4 pieces now read "human".
+- **What it didn't fix:**
+  - Criterion 2's gap rose from 0.311 to 0.363, still short of 0.40.
+  - Criterion 5's mean shift rose from 0.060 to 0.088, still short of 0.10.
+  - FP02 (0.758) and FP03 (0.754) are still accused, by under 0.01. Their
+    spreads (0.24 and 0.33) sit near the AI end, where 0.60 barely changes
+    anything.
+  - Criterion 4 and the malformed attacks are untouched, as expected.
+- **What it cost:**
+  - **Evasions read as human now.** A scale that reaches "human" sooner also
+    rewards anyone who fakes uneven sentences. EV02 got there by adding
+    one-word sentences, and AI text that used to land in "unsure" is now
+    called **human** (EV02, EV05). The evasion count didn't change, but those
+    two now pass with a confident wrong label rather than a hedge.
+  - **Fewer AI pieces labelled `ai`.** Two clearly-AI eval pieces dropped from
+    `ai` to unsure, including the calibration paragraph (0.763 → 0.700). The
+    AI mean fell from 0.885 to 0.854, which is part of why the gap still falls
+    short.
+- **The trade:** I made the honest-writer side better and the attacker side a
+  little worse. Given criterion 1's reasoning, that a wrong accusation costs
+  more than a missed detection, I'd keep it. But it doesn't fix problem 1. The
+  two signals still agree on plain writing (FP02, FP03), and that agreement is
+  what still accuses people.
 
 ---
 

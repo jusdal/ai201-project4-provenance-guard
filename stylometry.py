@@ -150,13 +150,17 @@ def style_signal(text: str) -> float:
     # Each measure is mapped onto 0–1 "AI-ness" between two anchors, then
     # clipped — so no measure wins just by having bigger numbers:
     #
-    #   spread  0.20 or less -> 1.0 (AI)    0.90 or more -> 0.0 (human)
+    #   spread  0.20 or less -> 1.0 (AI)    0.60 or more -> 0.0 (human)
     #   punct   0 per 100w   -> 1.0 (AI)    4 or more    -> 0.0 (human)
+    #
+    # The spread's human end was 0.90 until unit 8, Milestone 5. That came from
+    # one choppy fiction paragraph; real expository writing spreads 0.34–0.62,
+    # so at 0.90 it could only ever read as AI-leaning. See criteria.md, #2.
     #
     # type_token_ratio is computed but NOT used: on the calibration inputs it
     # ran backwards (formal AI prose had the most varied vocabulary). See the
     # README, Signals and Scoring.
-    spread_ai = _scale(sentence_length_spread(text), human_at=0.90, ai_at=0.20)
+    spread_ai = _scale(sentence_length_spread(text), human_at=0.60, ai_at=0.20)
     punct_ai = _scale(punctuation_density(text), human_at=4.0, ai_at=0.0)
     return round(0.6 * spread_ai + 0.4 * punct_ai, 4)
 
