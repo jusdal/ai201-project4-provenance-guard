@@ -583,6 +583,43 @@ login, not the request body. Until then, the per-address ceiling is the only
 part an attacker can't rename. I haven't built it: the stretch was the
 per-creator limit and what it changes.
 
+**Declared before building (2026-11-09, unit 8): a second measured
+improvement. Reject text with no writing in it.**
+
+Which diagnosis it comes from: **problem 3, "The route accepts text with no
+writing in it"** (MF03, MF04, MF05, MF06). What's Still Broken calls it the
+cheapest fix left. It's a separate change from the first improvement: the
+route, not signal two.
+
+Planned change, in `app.py::submit`, after the existing checks and **before
+the model runs**:
+
+- **Control characters** (anything in Unicode category `Cc` except tab,
+  newline and carriage return) → 400 `bad_text`. That's MF03.
+- **Fewer than 3 words**, counting runs of letters in any script, so Arabic
+  and other non-Latin writing still count → 400 `text_too_short`. That's MF04
+  (punctuation), MF05 (one 300-character "word") and MF06 (emoji).
+- **Under half of the non-space characters are letters** → 400 `no_writing`.
+  That's the backstop for a longer run of symbols with a few words mixed in.
+- Each rejection is logged with `audit.log_rejection`, like the others.
+
+What I predict, from replaying the check over every attack text and all 36
+criteria inputs without the service:
+
+- MF03–MF06 go from 200 + label to 400, so the attack run goes from 13 broke
+  to 9.
+- Nothing else changes outcome. MF02 and criterion 4's `"Hi."` were already
+  400 too-short and stay 400, now rejected before the model loads. MF07
+  (Arabic) still passes. The lowest letter share of any text that passes is
+  0.88 (PI05), far from the 0.50 line.
+- Criteria 1, 2, 3 and 5 don't move, because the check never touches a scored
+  text. Criterion 4 stays 26 of 27, because its miss is the rate limiter, not
+  validation.
+
+How I'll measure it: re-run the attack set and the five criteria three times,
+the same way as before and after, and report a third run log in the same
+table format, with whether it helped and what it cost.
+
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
 ---
