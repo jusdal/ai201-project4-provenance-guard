@@ -67,6 +67,22 @@ too easy.
 > that didn't exist and couldn't be measured. Someone else's prose also can't
 > show whether *my* writing gets wrongly flagged.
 
+### Verdict (unit 8, Milestone 4): **MET**
+
+**How I decided:** 0 of 20 came back `guess: "ai"` in trial 1, trial 2 and
+trial 3 (`results/run_2026-11-09_1539_before.md`). The target was at most 1 in
+every trial, so it holds.
+
+**Honest reading:** it's met, but narrowly. All 20 landed in "unsure", none in
+"human". The highest was `19.txt` at 0.7351, 0.015 under the 0.75 AI line, and 5
+of 20 scored 0.69 or more. It passed because the unsure band is wide, not because
+the signals read my writing as human. The attack set's false-positive family
+shows how thin that margin is: 3 of its 8 human texts *were* labelled AI
+(FP02, FP03, FP05). Those are short and use no punctuation beyond full stops and
+commas. My writing has citations, quotations and dashes, which signal two reads
+as human. This is the criterion I'd tighten: the same 20 pieces with none
+scoring above 0.70, or with the false-positive attack texts added to the set.
+
 ---
 
 ## 2. Scores spread apart, and all three labels are reachable
@@ -110,6 +126,40 @@ through misclassified clear cases.
 > single request bodies for the README's `curl` examples, so the original line
 > pointed at test sets that didn't exist and couldn't be measured.
 
+### Verdict (unit 8, Milestone 4): **MISSED**, both parts, in all 3 trials
+
+**How I decided:** in each trial, the AI pieces averaged 0.885 and my 15 human
+pieces averaged 0.574, a gap of **0.311** against a target of 0.40. The labels
+were human **0** / unsure 21 / ai 15. "Unsure" and "ai" clear 4, but "human"
+never appears. `combined_score` isn't recorded by `run_eval.py`, so I recomputed
+it with `scoring.py::combine_signals`. Every value matched the recorded
+`confidence` and `guess`.
+
+**Diagnosis:** the shortfall is entirely on the human side. The AI pieces did
+their job, and my writing scores too high to ever reach "human". Two stages
+cause it, and the label threshold makes it arithmetic.
+
+- **Signal one:** gpt2 finds my academic prose predictable. Across the 15
+  pieces `model_score` runs 0.47–0.91 (mean 0.63), and none is under 0.47.
+  Formal expository writing uses common words in conventional orders, which is
+  what low perplexity measures. It's the same thing that put the Federalist
+  paragraph and the second-language paragraph high.
+- **Signal two, the sentence-length spread scale:** spread maps to 0.0 (human)
+  only at 0.90. I set that from one calibration paragraph of choppy fiction. My
+  expository writing spreads 0.34–0.62, so that measure scores it 0.40–0.80
+  "AI". At 60% of the style score, it puts a floor of about 0.24 under
+  `style_score` even when punctuation reads fully human. The lowest style score
+  I got was 0.239.
+- **Label mapping:** at 100+ words `combined_score` is the plain average, so
+  "human" (< 0.35) needs `model + style < 0.70`. My best piece was 0.481 + 0.324
+  = 0.805 → 0.402. With signal one never under 0.47 and signal two floored near
+  0.24, no piece of mine can get there.
+
+**Stage and mechanism:** signal two's spread scale is calibrated to fiction, so
+it reads all expository prose as AI-leaning. Signal one reads formal prose as
+predictable. Together they put the "human" label out of reach for an academic
+writer.
+
 ---
 
 ## 3. Every appeal changes status and is recorded
@@ -129,6 +179,20 @@ Also, an appeal for a `content_id` that was never issued returns **404** with
 do, so it can't fail even once. Empty reasoning is tested on purpose: I made it
 optional so a writer who can't argue in polished English can still appeal, and
 that promise needs checking too.
+
+### Verdict (unit 8, Milestone 4): **MET**
+
+**How I decided:** `run_appeals.py::main` checked each appeal against all five
+conditions with no judgment calls: HTTP 200, `status: "under_review"`, the same
+`content_id`, an appeal entry in `GET /log` with the exact reasoning sent, and
+the original decision entry unchanged. The result was 10 of 10 in all 3 trials
+(5 written reasoning, 3 `""`, 2 field left out, logged as `""`). The
+never-issued `content_id` returned 404 `not_found` in 3 of 3
+(`results/appeals_2026-11-09_1549_before.md`).
+
+**Honest reading:** this one is exact, so there's no generous reading to take.
+What it doesn't test: appealing the same `content_id` twice, or an appeal
+reasoning over the 2,000-character limit.
 
 ---
 
@@ -155,6 +219,33 @@ returns 200 in 3 of 3 attempts.
 wrong, not crash the service or waste model time on megabytes of text. The
 5,000-character check makes sure the limit sits exactly where the contract says
 and doesn't reject a legitimate long piece.
+
+### Verdict (unit 8, Milestone 4): **MISSED**, 26 of 27
+
+**How I decided:** trials 1 and 2 were 9 of 9 → 400, but trial 3 was 8 of 9.
+Case 5 (`creator_id: ""`) got **429**, not 400. Eight cases were sent by
+`run_eval.py`. Case 7 (body not JSON) was sent by hand with `curl`, 3 of 3 →
+400 (`results/not_json_2026-11-09.txt`). Every 400 had both `error` and
+`message` (`results/bad_input_bodies_2026-11-09.txt`). There were zero 500s, the
+5,000-character text got 200 in 3 of 3, and `POST /ping` answered 200 after the
+run. Everything except the one 429 passed, but the target was 27 of 27, so it's
+a miss.
+
+**Diagnosis:**
+
+- **Stage:** the route, or more exactly the rate limiter that sits in front of it.
+- **Mechanism:** the `@limiter.limit(...)` decorator on `/submit` runs *before*
+  `app.py::submit` validates anything. `rate_limit_key` counts a request against
+  its `creator_id`, or against the caller's IP when there isn't one. Cases 2 and
+  5 have no usable `creator_id`, so they share one IP bucket of 5 per minute. By
+  trial 3 that bucket was full, and the malformed request was rejected for
+  *rate* before the route could reject it for *content*.
+
+This is the same mechanism as RQ10 and RQ11 in the attack run. Both were 429'd
+before the route saw them, so how the route handles form-encoded and
+`text/plain` bodies is still untested. The criterion predates the rate limiter
+(added in unit 8, Milestone 1), but it's still measurable, so it stays a miss
+rather than a revision.
 
 ---
 
@@ -184,6 +275,58 @@ often enough to matter.
 > Checked against 0.80, signal one alone would be judged on a cut-off the
 > service never applies, so the count of changed labels wouldn't measure what
 > signal two actually does.
+
+### Verdict (unit 8, Milestone 4): **MISSED**, both parts, in all 3 trials
+
+**How I decided:** in each trial **4** of 36 labels differed from what
+`model_score` alone would give (target ≥ 5), and the mean
+`|combined − model|` was **0.060** (target ≥ 0.10). Both numbers were identical
+across all three trials.
+
+**Diagnosis:**
+
+- **Stage:** signal two, through the combining rule.
+- **Mechanism:** at 100+ words `combined = (model + style) / 2`, so
+  `|combined − model|` is exactly half of `|style − model|`. A mean shift of
+  0.06 means the two signals were only 0.12 apart on average. They agree
+  because they measure overlapping things. Across the 36 inputs, `model_score`
+  and `style_score` correlate at **r = 0.75**.
+- **On the AI pieces:** all 15 use no punctuation beyond full stops and commas,
+  which pins the punctuation half of signal two at 1.0. Their sentences are
+  even, so the spread half is high too. Signal two just repeats signal one,
+  with a mean shift of 0.033.
+- **On my writing:** both signals land mid-to-high together, for the reasons
+  in criterion 2.
+
+**The count overstates signal two.** Of the 4 changed labels, 3 are my own
+pieces that signal one alone would have called "ai" (0.91, 0.81, 0.75). That's
+the job signal two is there for. But the 0.91 one is the 53-word
+second-language paragraph, and signal two *agreed* with signal one there
+(0.86). Their average is 0.885, which is still "ai". What moved it to unsure
+was the combining rule's short-text pull, not signal two. So signal two on its
+own changed 3 labels. The criterion measures `combined − model`, which counts
+the length pull as if it were signal two.
+
+---
+
+## Pattern across the misses
+
+The three misses come down to two problems, not three:
+
+1. **Both signals reward the same thing: even sentences and plain punctuation.**
+   That makes them correlated (r = 0.75), so averaging them adds little.
+   Criterion 5 misses because signal two rarely disagrees with signal one.
+   Criterion 2 misses because when they agree on my academic writing, they
+   agree on "fairly AI". The attack run's three false accusations (FP02, FP03,
+   FP05) are the same problem with less punctuation to protect them: both
+   signals score 0.74–0.97. Signal two's spread scale is the part most worth
+   recalibrating, because its human end (0.90) sits where real expository
+   prose almost never goes.
+2. **The rate limiter runs before validation.** That's criterion 4's one 429,
+   and it's why RQ10 and RQ11 never reached the route.
+
+No criterion is broken in the "can't be measured" sense. All three misses
+stay misses.
 
 ---
 
