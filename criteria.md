@@ -98,6 +98,18 @@ through misclassified clear cases.
 > 0.80 the clearly-AI calibration sample (combined 0.763) could never be
 > labelled AI, so the "why" above described a band the code no longer uses.
 
+> **Revised in unit 8 (2026-11-09, Milestone 3):** The 36 inputs are defined
+> in `scenarios.py`. The 15 human pieces are the first 15 of
+> `MY_WRITING` (my own writing, `samples/my_writing/`, see criterion 1).
+> The 15 clearly-AI pieces are `CLEARLY_AI`, and the 6 borderline pieces are
+> `BORDERLINE`. The targets are unchanged: a mean gap of at least 0.40, and at
+> least 4 of each label, in each of 3 trials. Criterion 5 uses the same 36.
+>
+> **Why revised:** `samples/clearly_human.json`, `samples/clearly_ai.json` and
+> `samples/borderline.json` each hold one piece, not 15, 15 and 6. They're
+> single request bodies for the README's `curl` examples, so the original line
+> pointed at test sets that didn't exist and couldn't be measured.
+
 ---
 
 ## 3. Every appeal changes status and is recorded
