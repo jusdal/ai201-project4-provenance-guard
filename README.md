@@ -436,6 +436,30 @@ $ curl http://127.0.0.1:5000/content/c_doesnotexist
 }
 ```
 
+**Declared before building (2026-11-09, unit 8): per-creator rate limits.**
+
+Already built: the limiter keys on `creator_id`, not address
+(`app.py::rate_limit_key`). I did that in unit 8, Milestone 1 (commit
+`a3402b3`) when I turned rate limiting on, before I'd read this stretch list.
+What this declaration covers is the part that isn't done: showing it works,
+and the note on what it changes.
+
+Planned:
+
+- **Show the keying works.** From one address, send 6 submissions as one
+  `creator_id` and then 6 as another. Expect the first creator's 6th request to
+  get 429 and the second creator's first 5 to get 200, because they don't share
+  a limit.
+- **Show the edges.** Requests with no usable `creator_id` should share one
+  limit for the whole address. A script that picks a new `creator_id` for every
+  request should never hit the limit.
+- **Write what it changes** compared with per-address limits:
+  - who it protects: people sharing one network, like a household or a school;
+  - who it lets through: a script rotating `creator_id`s;
+  - the side effect criterion 4 found: malformed requests without a
+    `creator_id` share the address's limit, so they can get a 429 before the
+    route ever validates them.
+
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
 ---
