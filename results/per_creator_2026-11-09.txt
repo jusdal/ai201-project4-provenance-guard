@@ -1,0 +1,12 @@
+# Per-creator rate limits, 2026-11-09 16:21, all from one address (127.0.0.1)
+# Limit: 5 per minute, 50 per day, keyed by app.py::rate_limit_key
+
+## 1. Two creators, one address: 6 as A, then 6 as B
+creator A: 200 200 200 200 200 429
+creator B: 200 200 200 200 200 429
+
+## 2. No creator_id: every request falls back to the address's own limit
+no creator_id: 400(bad_request) 400(bad_request) 400(bad_request) 400(bad_request) 400(bad_request) 429(rate_limited) 429(rate_limited)
+
+## 3. A new creator_id on every request, 12 in a row
+rotating ids: 200 200 200 200 200 200 200 200 200 200 200 200

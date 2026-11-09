@@ -520,6 +520,54 @@ Planned:
     `creator_id` share the address's limit, so they can get a 429 before the
     route ever validates them.
 
+**Built:** `app.py::rate_limit_key` (from Milestone 1, unchanged). It returns
+the request's `creator_id` when it's a non-blank string, and the caller's
+address otherwise. Flask-Limiter keeps one 5-per-minute and 50-per-day count
+per key.
+
+**Shown working**, all from one address, 127.0.0.1
+([results/per_creator_2026-11-09.txt](results/per_creator_2026-11-09.txt)):
+
+```
+## 1. Two creators, one address: 6 as A, then 6 as B
+creator A: 200 200 200 200 200 429
+creator B: 200 200 200 200 200 429
+
+## 2. No creator_id: every request falls back to the address's own limit
+no creator_id: 400(bad_request) 400(bad_request) 400(bad_request) 400(bad_request) 400(bad_request) 429(rate_limited) 429(rate_limited)
+
+## 3. A new creator_id on every request, 12 in a row
+rotating ids: 200 200 200 200 200 200 200 200 200 200 200 200
+```
+
+**What it changes, compared with per-address limits:**
+
+- **People sharing a network don't block each other.** Per address, creator B
+  in test 1 would have been refused on its very first request, because A had
+  already used the address's 5. In a household, a school or an office behind
+  one public address, the first busy writer would lock out everyone else.
+  Here each writer gets their own 5.
+- **A script that rotates `creator_id` isn't limited at all.** Test 3 sent 12
+  in a row and got 12 × 200. Per address it would have been cut off at the
+  6th. `creator_id` is whatever the caller types, and nothing checks it, so the
+  limit is only as strong as the caller's honesty. The threshold-mapping
+  script from the Rate Limiting section, a thousand variations, gets through
+  by giving each variation a new name. That's also why the attack set never
+  tripped the limit: `run_attacks.py` gives every attack its own `creator_id`.
+- **Requests with no `creator_id` share one count per address, and it's
+  checked before the route.** Test 2's 6th and 7th requests were malformed and
+  got 429, not the 400 that says what's wrong. That's criterion 4's one miss,
+  and it's why RQ10 and RQ11 never reached the route.
+
+**What I'd add if this ran for real:** keep the per-creator limit, and add a
+looser per-address ceiling on top, for example 30 a minute. Flask-Limiter can
+stack a second limit keyed by `get_remote_address`. Writers on a shared network
+would still each get their own 5, but one address rotating names would be cut
+off at 30 a minute, not never. A real fix needs `creator_id` to come from a
+login, not the request body. Until then, the per-address ceiling is the only
+part an attacker can't rename. I haven't built it: the stretch was the
+per-creator limit and what it changes.
+
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
 ---
