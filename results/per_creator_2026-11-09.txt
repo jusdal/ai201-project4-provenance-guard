@@ -10,3 +10,15 @@ no creator_id: 400(bad_request) 400(bad_request) 400(bad_request) 400(bad_reques
 
 ## 3. A new creator_id on every request, 12 in a row
 rotating ids: 200 200 200 200 200 200 200 200 200 200 200 200
+
+## 4. One creator_id, a new address for every request, 7 in a row
+# 2026-11-09, through Flask's test client so each request can carry its own
+# REMOTE_ADDR (10.0.0.1 … 10.0.0.7). Same app, same limiter, same 5 per minute.
+  from 10.0.0.1: 200
+  from 10.0.0.2: 200
+  from 10.0.0.3: 200
+  from 10.0.0.4: 200
+  from 10.0.0.5: 200
+  from 10.0.0.6: 429
+  from 10.0.0.7: 429
+proxy_rotator: 200 200 200 200 200 429 429

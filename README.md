@@ -538,10 +538,25 @@ no creator_id: 400(bad_request) 400(bad_request) 400(bad_request) 400(bad_reques
 
 ## 3. A new creator_id on every request, 12 in a row
 rotating ids: 200 200 200 200 200 200 200 200 200 200 200 200
+
+## 4. One creator_id, a new address for every request, 7 in a row
+proxy_rotator: 200 200 200 200 200 429 429
 ```
+
+Test 4 needs a different address per request, which `curl` from one laptop
+can't give, so it goes through Flask's test client with `REMOTE_ADDR` set to
+10.0.0.1 … 10.0.0.7. It's the same app and the same limiter.
 
 **What it changes, compared with per-address limits:**
 
+- **It catches one account spread across many addresses.** That's the abuse
+  per-address limiting misses: one account sending through rotating proxies,
+  a VPN that changes exit, or a phone moving between Wi-Fi and mobile data.
+  Per address, each of test 4's seven addresses would have had its own fresh
+  5, so all 7 would have got 200, and a proxy pool of 200 addresses would get
+  1,000 a minute under one name. Keyed by creator, the 6th request was refused
+  whatever address it came from. The account that's building up a record of
+  submissions (and appeals) is the one that gets limited.
 - **People sharing a network don't block each other.** Per address, creator B
   in test 1 would have been refused on its very first request, because A had
   already used the address's 5. In a household, a school or an office behind
@@ -720,11 +735,18 @@ because that's the number the thresholds (0.35 / 0.75) apply to.
 | FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
 | FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
 
-**Audit log entries from the run** (12 of them: three false accusations, three
-evasions, two junk inputs that signal one scored as near-certain AI, the log
-injection attempt, and three rejections, two of them 429s)
+**Audit log entries from the run** (15 of them: three false accusations, one
+human text 0.015 under the AI line, four evasions, one of the two evasions
+that were caught, two junk inputs that signal one scored as near-certain AI, the log
+injection attempt, and three rejections, two of them 429s). The first 12 are
+decisions and carry all nine fields. Rejections are written by
+`audit.log_rejection`: there's no decision, so they carry the reason instead
+of scores and a label.
 
 ```json
+{"timestamp": "2026-11-09T08:03:13+00:00", "content_id": "c_09fa8188db4d", "creator_id": "attacker_FP04", "guess": "unsure", "model_score": 0.8329, "style_score": 0.8571, "combined_score": 0.7346, "label": "We can't tell whether this was written by a person or with an AI tool. Lots of people's own writing lands here, so this isn't a finding against the work. If you wrote it and want a person to take a look, you can ask for a review.", "status": "decided"}
+{"timestamp": "2026-11-09T08:03:12+00:00", "content_id": "c_6c994776286d", "creator_id": "attacker_EV04", "guess": "ai", "model_score": 0.6114, "style_score": 1.0, "combined_score": 0.7629, "label": "This text has strong patterns we usually see in writing from AI tools. Our check can be wrong, especially on plain or simple writing. If you wrote this yourself, ask for a review and a person will look at it. Nothing changes until they do.", "status": "decided"}
+{"timestamp": "2026-11-09T08:03:13+00:00", "content_id": "c_0ea037bca2a1", "creator_id": "attacker_EV06", "guess": "unsure", "model_score": 0.5727, "style_score": 0.4, "combined_score": 0.4874, "label": "We can't tell whether this was written by a person or with an AI tool. Lots of people's own writing lands here, so this isn't a finding against the work. If you wrote it and want a person to take a look, you can ask for a review.", "status": "decided"}
 {"timestamp": "2026-11-09T08:03:13+00:00", "content_id": "c_9766f30b52b7", "creator_id": "attacker_FP03", "guess": "ai", "model_score": 0.8051, "style_score": 0.8901, "combined_score": 0.7885, "label": "This text has strong patterns we usually see in writing from AI tools. Our check can be wrong, especially on plain or simple writing. If you wrote this yourself, ask for a review and a person will look at it. Nothing changes until they do.", "status": "decided"}
 {"timestamp": "2026-11-09T08:03:13+00:00", "content_id": "c_7d3172539035", "creator_id": "attacker_FP02", "guess": "ai", "model_score": 0.7387, "style_score": 0.9655, "combined_score": 0.7676, "label": "This text has strong patterns we usually see in writing from AI tools. Our check can be wrong, especially on plain or simple writing. If you wrote this yourself, ask for a review and a person will look at it. Nothing changes until they do.", "status": "decided"}
 {"timestamp": "2026-11-09T08:03:13+00:00", "content_id": "c_b4aefc952f37", "creator_id": "attacker_FP05", "guess": "ai", "model_score": 0.8005, "style_score": 0.9341, "combined_score": 0.7571, "label": "This text has strong patterns we usually see in writing from AI tools. Our check can be wrong, especially on plain or simple writing. If you wrote this yourself, ask for a review and a person will look at it. Nothing changes until they do.", "status": "decided"}
@@ -740,6 +762,13 @@ injection attempt, and three rejections, two of them 429s)
 ```
 
 What these show:
+- **FP04**, a student essay written to a rubric, is human writing at 0.7346,
+  0.015 under the AI line. It held, but only just: both signals read it as AI
+  (model 0.83, style 0.86).
+- **EV04** is one of the two evasions labelled `ai` (EV10 is the other): rare words didn't lift
+  perplexity enough (model 0.61), and signal two still read 1.0.
+- **EV06** shows how cheaply signal two moves: one very long sentence and one
+  very short one took it to 0.40, and the AI text landed at 0.487.
 - **FP03, FP02, FP05** are three human writers labeled `ai`. All three are
   plain, regular, careful writing, and both signals rate them as AI-like
   (model 0.74–0.81, style 0.89–0.97).
