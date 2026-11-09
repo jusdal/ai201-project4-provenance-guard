@@ -652,38 +652,164 @@ able to argue with it.
 
 ## Run Log and Verdicts
 
-<!-- Your five criteria across three trials. `run_eval.py --label before`. -->
+My five criteria (`criteria.md`), three trials each, at commit `2ee36b2`.
+Criteria 1, 2, 4 and 5 come from `python run_eval.py --label before`
+([results/run_2026-11-09_1539_before.md](results/run_2026-11-09_1539_before.md)).
+Criterion 3 comes from `python run_appeals.py --label before`
+([results/appeals_2026-11-09_1549_before.md](results/appeals_2026-11-09_1549_before.md)).
+How I reached each verdict is written under each criterion in `criteria.md`.
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
-| --------- | ------ | ----- | ----- | ----- | ------- |
-| 1.        |        |       |       |       |         |
-| 2.        |        |       |       |       |         |
-| 3.        |        |       |       |       |         |
-| 4.        |        |       |       |       |         |
-| 5.        |        |       |       |       |         |
+|---|---|---|---|---|---|
+| 1. My own writing labelled high-confidence AI | ≤ 1 of 20 | 0/20 | 0/20 | 0/20 | MET |
+| 2. Scores spread apart, all three labels reachable | gap ≥ 0.40 and each label ≥ 4 of 36 | gap 0.311 · human 0 | gap 0.311 · human 0 | gap 0.311 · human 0 | MISSED |
+| 3. Every appeal changes status and is recorded | 10 of 10, never-issued id → 404 | 10/10 · 404 | 10/10 · 404 | 10/10 · 404 | MET |
+| 4. Bad input gets a clean 400, never a crash | 9 of 9 → 400 each trial (27/27) | 9/9 | 9/9 | 8/9 (one 429) | MISSED |
+| 5. Signal two actually changes outcomes | ≥ 5 labels changed and mean shift ≥ 0.10 | 4 · 0.060 | 4 · 0.060 | 4 · 0.060 | MISSED |
 
-**Real output from one trial**, pasted as text, naming the file and function
-that produced it:
+All three trials were identical on every score, to the fourth decimal. Nothing
+in the pipeline is random for a given input, so the repeats agreeing is
+expected rather than lucky. The only difference anywhere is criterion 4's one 429.
+
+**Real output from trial 1.** `run_eval.py::main` → `app.py::submit` for
+criteria 1, 2, 4 and 5, and `run_appeals.py::main` → `app.py::appeal` and
+`GET /log` for criterion 3. The `label` text is cut for space.
 
 ```json
-
+// 1. my own writing, the piece closest to the AI line (19.txt, combined 0.7351)
+{"status": 200, "guess": "unsure", "confidence": 0.4702, "model_score": 0.8062, "style_score": 0.664, "sent": "INTRODUCTION\n\nI have been thinking about which sociocultural phenomena"}
+// 2. my lowest-scoring piece, still not "human" (04.txt, combined 0.402)
+{"status": 200, "guess": "unsure", "confidence": 0.1956, "model_score": 0.4807, "style_score": 0.3237, "sent": "GLOBALIZATION\n\nHistorically, anthropologists have studied places bound"}
+// 2. a clearly-AI piece
+{"status": 200, "guess": "ai", "confidence": 0.908, "model_score": 0.9079, "style_score": 1.0, "sent": "Regular physical activity offers a wide range of benefits for both phy"}
+// 3. the decision and the appeal for one content_id, from GET /log
+{"combined_score": 0.7038, "content_id": "c_5a6be5d45337", "creator_id": "eval_appeal_154915_t1_1", "guess": "unsure", "model_score": 0.9101, "status": "decided", "style_score": 0.8589, "timestamp": "2026-11-09T08:49:15+00:00"}
+{"content_id": "c_5a6be5d45337", "creator_id": "eval_appeal_154915_t1_1", "event": "appeal", "reasoning": "I wrote this myself for a graduate seminar. I can share my drafts.", "status": "under_review", "timestamp": "2026-11-09T08:49:16+00:00"}
+// 4. trial 3, case 5 (creator_id ""), the miss
+{"status": 429, "guess": null, "confidence": null, "model_score": null, "style_score": null, "sent": "I didn't sleep. Not properly, anyway — I lay there listening to the bo"}
+// 4. what the other 400s carry (results/bad_input_bodies_2026-11-09.txt)
+{"error": "bad_request", "message": "Send JSON with a non-empty text."}
+// 5. signal one alone says ai (0.9101 ≥ 0.75); combined 0.7038 says unsure
+{"status": 200, "guess": "unsure", "confidence": 0.4076, "model_score": 0.9101, "style_score": 0.8589, "sent": "I moved here two years ago. At first it was hard. I did not know many "}
 ```
 
 **Diagnoses**
 
-<!-- For each miss AND each broken attack: the stage and the mechanism.
+17 failures: 3 criteria missed and 14 attacks broken. They come down to four
+problems. The first one, both signals measuring plainness rather than
+authorship, accounts for most of them.
 
-     Your service has five stages: the route, signal one, signal two, the
-     combining rule, and the label mapping.
+**1. Both signals score "plain and even" as AI, so they fail together.**
+*Criteria 2 and 5; attacks FP02, FP03, FP05.*
 
-     Not a diagnosis:  "The evasion attacks got through."
-     A diagnosis:      "Four evasion inputs got through. All four had typos
-                        added to AI-generated text. My second signal measures
-                        word variety, and typos raise word variety — so it read
-                        them as more human. My combining rule weights that
-                        signal at 0.6, so it dragged the whole score down."
+- **FP02, FP03 and FP05** are human writing labelled `ai` at 0.757–0.789: a
+  working-group report, a non-native speaker's paragraph, and technical
+  documentation.
+  - **Signal one** scores all three 0.74–0.81, because they use common words in
+    expected orders and gpt2 predicts them easily.
+  - **Signal two** scores all three 0.89–0.97. None uses punctuation beyond full
+    stops and commas, so the punctuation half of signal two is pinned at 1.0
+    (AI). Their sentences are even (spread 0.24–0.33), so the spread half reads
+    0.82–0.94.
+  - **The combining rule** averages the two as if they were independent
+    evidence, so agreement looks like confidence.
+  - At 70–83 words the short-text pull was only partial, and they cleared the
+    0.75 line anyway.
+- **Criteria 2 and 5** are the same mechanism in my own writing. Across the
+  36 eval inputs the two signals correlate at r = 0.75.
+  - **Criterion 5:** an average of two correlated signals barely moves from
+    either one (mean shift 0.060).
+  - **Criterion 2:** on academic prose they agree on "fairly AI". Signal one never
+    scored my writing under 0.47. Signal two's spread scale only reaches
+    "human" at 0.90, a value I set from one choppy fiction paragraph, and my
+    writing spreads 0.34–0.62. So "human" (< 0.35) is out of reach.
+- **Stage:** signal one and signal two, which share a blind spot, combined by
+  `scoring.py::combine_signals`.
+- **Mechanism:** both measure plainness, and plainness isn't authorship.
+  Milestone 1 predicted this for the second-language writer: "the same mistake
+  counted twice."
 
-     Look for a pattern. Five failures on one signal is one problem, not five. -->
+**2. Signal two's two measures max out cheaply.** *Attacks EV02, EV03, EV06,
+EV07.*
+
+All four reshape the same AI paragraph without adding new ideas, and all four
+landed in "unsure" (0.367–0.590).
+
+| Attack | What it does to the paragraph | Signal two result |
+|---|---|---|
+| EV02 | inserts "Really." between sentences | spread 0.85 → 0.07 AI; style 0.11 |
+| EV06 | one very long sentence and one very short | spread 1.19 → 0.00; style 0.40 |
+| EV03 | pastes in a quotation | a colon, two quotation marks and a question mark, 3.77 marks per 100 words → 0.06; style 0.41 |
+| EV07 | joins sentences with "; and, moreover," six times, plus one dash | 7.22 per 100 → 0.00; style 0.60, held up only because the paragraph is now one sentence (spread reads 1.0 AI) |
+
+- **Stage:** signal two, `stylometry.py::style_signal`.
+- **Mechanism:**
+  - **Punctuation:** the scale reads fully human at only 4 marks per 100 words,
+    so four semicolons are enough.
+  - **Sentence spread:** fully human at 0.90, which a few one-word sentences
+    reach.
+  - **Combining rule:** signal one was only 0.57–0.67 on these, not enough to
+    hold the 50/50 average above 0.75 once signal two dropped.
+- **Pattern 1 from the other side:** the spread scale is wrong at both ends.
+  Honest expository prose can't reach its human end, while a cheap degenerate
+  edit maxes it out. It rewards odd shapes, not human ones.
+
+**3. The route accepts text with no writing in it.** *Attacks MF03, MF04, MF05,
+MF06.*
+
+- **What got through:** ANSI control codes, a line of punctuation, one
+  300-character "word", and a run of emoji. Each got a 200, a `content_id` and
+  a label.
+- **What the route checks:** `app.py::submit` only rejects text that isn't a
+  string, is blank, or is over 5,000 characters. `detector.py` only rejects text
+  under 3 tokens. Nothing checks that the text contains words.
+- **Signal one** scored the emoji 0.997 and the "word" 0.998.
+- **Signal two** scored all four 1.0, through two edge cases:
+  `punctuation_density` returns 0 when there are no words, and
+  `sentence_length_spread` returns 0 for one sentence. Both of those map to "AI".
+- **What saved them:** `stylometry.words()` finds 0–3 words, so the short-text
+  pull drags the score to about 0.5, "unsure". A longer run of junk would be
+  labelled `ai`.
+- **MF07** (Arabic, held) has the same exposure: signal one 0.906.
+- **Stage:** the route.
+- **Mechanism:** no minimum word count before scoring.
+
+**4. Three one-off evasions.**
+
+- **EV01, typos.**
+  - **Stage:** signal one, not signal two, which is what it targeted.
+  - **Mechanism:** misspellings are rare token sequences to gpt2, so perplexity
+    rises and `model_score` fell to 0.16. Signal two didn't move (1.0), because
+    typos change neither sentence length nor punctuation, and word variety isn't
+    in the score.
+  - **Combining rule:** the average of 0.16 and 1.0 is 0.57, "unsure".
+  - That's the rule working as designed: two signals disagreeing means
+    uncertainty. But it means an attacker only has to fool *one* signal to leave
+    "ai", since "ai" needs the average at 0.75 or above.
+- **EV09, a human opening paragraph bolted onto AI text.**
+  - **Stage:** both signals, then the label mapping.
+  - **Mechanism:** both signals score the whole text as one block, so the human
+    opener dilutes each (model 0.70, style 0.77). The result is 0.7375, 0.0125
+    under the AI line.
+  - Nothing scores sections separately, so a mixed document gets one averaged
+    score.
+- **EV05, a heavy human editing pass.**
+  - **Stage:** both signals, working as intended.
+  - **Mechanism:** the edit adds real human choices: a dash, an aside, uneven
+    sentences (spread 0.68). So model 0.32 and style 0.47 give 0.415.
+  - I count it as broken by my rule, but I'm not sure it should be fixed. Once
+    a person has rewritten it this much, calling it `ai` would also accuse
+    people who edit their own drafts heavily.
+
+**Across all four:** the misses split cleanly by who pays.
+
+- **The 3 false accusations and criterion 2** fall on real writers, and they
+  come from problem 1.
+- **The 7 evasions** cost the site, and they come from problems 1, 2 and 4: the
+  0.75 AI line I raised in Milestone 1 to protect writers is easy to fall under.
+
+The highest-value fix is the one that cuts false accusations without making
+evasion easier: recalibrate signal two so it stops treating plainness as AI.
 
 ---
 
