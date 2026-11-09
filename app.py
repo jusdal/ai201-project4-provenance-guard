@@ -25,6 +25,8 @@ Routes:
     GET  /content/<id> one item's current status (stretch)
 """
 
+import re
+import unicodedata
 import uuid
 
 from flask import Flask, jsonify, request
@@ -244,6 +246,24 @@ def submit():
             400, "text_too_long", "too_long", creator_id, text,
             f"Text is over {config.MAX_TEXT_CHARS:,} characters.",
         )
+    # Junk that isn't writing (emoji, punctuation, control codes) used to get
+    # a score and a label, and signal one rated it near-certain AI.
+    problem = _writing_problem(text)
+    if problem == "control_chars":
+        return _reject(
+            400, "bad_text", "control_chars", creator_id, text,
+            "Text contains control characters.",
+        )
+    if problem == "too_few_words":
+        return _reject(
+            400, "text_too_short", "too_few_words", creator_id, text,
+            f"Text needs at least {config.MIN_WORDS} words to check.",
+        )
+    if problem == "mostly_symbols":
+        return _reject(
+            400, "no_writing", "mostly_symbols", creator_id, text,
+            "Text is mostly symbols, not writing, so there's nothing to check.",
+        )
 
     import detector
 
@@ -297,6 +317,19 @@ def submit():
         ),
         200,
     )
+
+
+def _writing_problem(text):
+    """Why this text has no writing to check, or None if it does."""
+    if any(unicodedata.category(c) == "Cc" and c not in "\t\n\r" for c in text):
+        return "control_chars"
+    # Runs of letters in any script: Arabic counts, emoji and digits don't.
+    if len(re.findall(r"[^\W\d_]+", text)) < config.MIN_WORDS:
+        return "too_few_words"
+    nonspace = [c for c in text if not c.isspace()]
+    if sum(c.isalpha() for c in nonspace) < config.MIN_LETTER_SHARE * len(nonspace):
+        return "mostly_symbols"
+    return None
 
 
 def _reject(status, error, reason, creator_id, text, message):

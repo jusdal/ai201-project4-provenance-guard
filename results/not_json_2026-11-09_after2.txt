@@ -1,0 +1,80 @@
+HTTP/1.1 429 TOO MANY REQUESTS
+Server: Werkzeug/3.1.9 Python/3.13.15
+Date: Mon, 09 Nov 2026 09:31:26 GMT
+Content-Type: application/json
+Content-Length: 103
+Connection: close
+
+{"error":"rate_limited","limit":"5 per 1 minute","message":"Too many submissions. Try again shortly."}
+
+---
+HTTP/1.1 429 TOO MANY REQUESTS
+Server: Werkzeug/3.1.9 Python/3.13.15
+Date: Mon, 09 Nov 2026 09:31:26 GMT
+Content-Type: application/json
+Content-Length: 103
+Connection: close
+
+{"error":"rate_limited","limit":"5 per 1 minute","message":"Too many submissions. Try again shortly."}
+
+---
+HTTP/1.1 429 TOO MANY REQUESTS
+Server: Werkzeug/3.1.9 Python/3.13.15
+Date: Mon, 09 Nov 2026 09:31:26 GMT
+Content-Type: application/json
+Content-Length: 103
+Connection: close
+
+{"error":"rate_limited","limit":"5 per 1 minute","message":"Too many submissions. Try again shortly."}
+
+---
+# POST /ping after the run
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.9 Python/3.13.15
+Date: Mon, 09 Nov 2026 09:31:26 GMT
+Content-Type: application/json
+Content-Length: 60
+Connection: close
+
+{"ok":true,"service":"provenance-guard","you_sent":"hello"}
+
+# Second attempt, 70 s later, after the per-address minute cleared
+HTTP/1.1 400 BAD REQUEST
+Server: Werkzeug/3.1.9 Python/3.13.15
+Date: Mon, 09 Nov 2026 09:32:43 GMT
+Content-Type: application/json
+Content-Length: 69
+Connection: close
+
+{"error":"bad_request","message":"Send JSON with a non-empty text."}
+
+---
+HTTP/1.1 400 BAD REQUEST
+Server: Werkzeug/3.1.9 Python/3.13.15
+Date: Mon, 09 Nov 2026 09:32:43 GMT
+Content-Type: application/json
+Content-Length: 69
+Connection: close
+
+{"error":"bad_request","message":"Send JSON with a non-empty text."}
+
+---
+HTTP/1.1 400 BAD REQUEST
+Server: Werkzeug/3.1.9 Python/3.13.15
+Date: Mon, 09 Nov 2026 09:32:43 GMT
+Content-Type: application/json
+Content-Length: 69
+Connection: close
+
+{"error":"bad_request","message":"Send JSON with a non-empty text."}
+
+---
+# POST /ping after the run
+HTTP/1.1 200 OK
+Server: Werkzeug/3.1.9 Python/3.13.15
+Date: Mon, 09 Nov 2026 09:32:43 GMT
+Content-Type: application/json
+Content-Length: 60
+Connection: close
+
+{"ok":true,"service":"provenance-guard","you_sent":"hello"}

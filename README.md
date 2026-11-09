@@ -418,6 +418,22 @@ $ curl -X POST http://127.0.0.1:5000/appeal \
   re-ran with the same spacing as the before run. I didn't report the worse
   numbers as a result of the change.
 
+**Moment 7: the second improvement**
+
+- _What I asked for:_ The junk-input fix from What's Still Broken, done as a
+  stretch, declared and committed before any code changed.
+- _What came back:_ Before writing the declaration, Claude replayed the
+  planned check over every attack text and all 36 criteria inputs and
+  predicted that only MF03–MF06 would change. It caught that MF03's ANSI codes
+  contain enough letters to pass a word count, so the check needed a
+  control-character rule, and that `stylometry.words` would have rejected
+  Arabic. After the run, it probed the check with inputs outside my sets and
+  found that it rejects short Chinese and Japanese, and that three very long
+  "words" get past it.
+- _What I changed:_ I put those costs in the write-up rather than leaving
+  "no side effects" as the result, since my own test sets couldn't have
+  shown them.
+
 ## Stretch Features
 
 **Declared before building (2026-11-02): `GET /content/<id>`.**
@@ -619,6 +635,205 @@ criteria inputs without the service:
 How I'll measure it: re-run the attack set and the five criteria three times,
 the same way as before and after, and report a third run log in the same
 table format, with whether it helped and what it cost.
+
+**Built:** `app.py::_writing_problem`, called from `app.py::submit` after the
+length check and before the model runs. The two numbers are `MIN_WORDS = 3`
+and `MIN_LETTER_SHARE = 0.5` in `config.py`. Each rejection is logged with
+`audit.log_rejection`, with the reason (`control_chars`, `too_few_words`,
+`mostly_symbols`) and the text's length. Nothing else changed: the first
+improvement (spread human end 0.60) is still in, and signals, weights and
+thresholds are as they were.
+
+**How I ran it:** the same three runs as before and after, against commit
+`d04b895` plus this change, on 2026-11-09. Attack set:
+`python run_attacks.py --set attack_set --label after2`
+([results/attack_run_2026-11-09_1629_after2.md](results/attack_run_2026-11-09_1629_after2.md),
+audit log for the run in
+[results/audit_run_2026-11-09_1629_after2.jsonl](results/audit_run_2026-11-09_1629_after2.jsonl)).
+Criteria: `python run_eval.py --label after2`
+([results/run_2026-11-09_1630_after2.md](results/run_2026-11-09_1630_after2.md))
+and `python run_appeals.py --label after2`
+([results/appeals_2026-11-09_1631_after2.md](results/appeals_2026-11-09_1631_after2.md)).
+I restarted the service between the attack run and the criteria run, so the
+attack run's per-address count couldn't spill into criterion 4 the way it did
+in Milestone 5. I ran the service on port 5001, because my dev server was
+already using 5000.
+
+### Five criteria — before, after, after 2
+
+Three trials each. Every trial was identical within each set. All 195
+responses in the after-2 run (status, guess, confidence and both signal
+scores) are identical to the after run's.
+
+The after-2 run log, in the same format as Run Log and Verdicts:
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. My own writing labelled high-confidence AI | ≤ 1 of 20 | 0/20 | 0/20 | 0/20 | MET |
+| 2. Scores spread apart, all three labels reachable | gap ≥ 0.40 and each label ≥ 4 of 36 | gap 0.363 · human 4 | gap 0.363 · human 4 | gap 0.363 · human 4 | MISSED |
+| 3. Every appeal changes status and is recorded | 10 of 10, never-issued id → 404 | 10/10 · 404 | 10/10 · 404 | 10/10 · 404 | MET |
+| 4. Bad input gets a clean 400, never a crash | 9 of 9 → 400 each trial (27/27) | 9/9 | 9/9 | 8/9 (one 429) | MISSED |
+| 5. Signal two actually changes outcomes | ≥ 5 labels changed and mean shift ≥ 0.10 | 10 · 0.088 | 10 · 0.088 | 10 · 0.088 | MISSED |
+
+All three side by side:
+
+| Criterion | Target | Before (×3) | After (×3) | After 2 (×3) | Verdict before → after → after 2 |
+|---|---|---|---|---|---|
+| 1. My own writing labelled AI | ≤ 1 of 20 | 0/20 | 0/20 | 0/20 | MET → MET → MET |
+| 2. Spread and labels | gap ≥ 0.40, each label ≥ 4 | gap 0.311 · H/U/A 0/21/15 | gap 0.363 · H/U/A 4/19/13 | gap 0.363 · H/U/A 4/19/13 | MISSED → MISSED → MISSED |
+| 3. Appeals | 10/10 + 404 | 10/10 · 404 | 10/10 · 404 | 10/10 · 404 | MET → MET → MET |
+| 4. Bad input | 27/27 → 400 | 26/27 | 26/27 | 26/27 | MISSED → MISSED → MISSED |
+| 5. Signal two changes outcomes | ≥ 5 labels, shift ≥ 0.10 | 4 · 0.060 | 10 · 0.088 | 10 · 0.088 | MISSED → MISSED → MISSED |
+
+Criterion 4's one miss is the same request as before: trial 3, case 5
+(`creator_id: ""`), 429 from the rate limiter before the route runs. Case 8
+(`"Hi."`) is still 400, but now from the new check, before the model loads:
+
+```json
+{"error": "text_too_short", "message": "Text needs at least 3 words to check."}
+```
+
+The not-JSON case (case 7) was sent by hand with `curl`, as before
+([results/not_json_2026-11-09_after2.txt](results/not_json_2026-11-09_after2.txt)).
+The first attempt came straight after the criteria run, so the address's 5
+per minute was already used and all three got 429. 70 seconds later all
+three got 400 `bad_request`, and `POST /ping` answered 200 after both. The
+first attempt is in the file, and I'm counting the spaced one, the same
+way as in Milestone 5. A 5,000-character text still got 200 in 3 of 3.
+
+### Attack Run — After 2
+
+**47 held, 9 broke** (after: 43 / 13; before: 42 / 14). Nothing crashed and
+nothing returned a 5xx.
+
+| Family | Before held / broke | After held / broke | After 2 held / broke |
+|---|---|---|---|
+| `evasion` | 3 / 7 | 3 / 7 | 3 / 7 |
+| `false_positive` | 5 / 3 | 6 / 2 | 6 / 2 |
+| `prompt_injection` | 6 / 0 | 6 / 0 | 6 / 0 |
+| `malformed` | 16 / 4 | 16 / 4 | **20 / 0** |
+| `flood_same_creator` | 12 / 0 | 12 / 0 | 12 / 0 |
+| **Total** | 42 / 14 | 43 / 13 | **47 / 9** |
+
+Four rows changed, and every scored row kept the same scores and guess:
+
+| Attack | After | After 2 |
+|---|---|---|
+| MF03, control characters | 200, unsure, a content_id | **400** `bad_text` (control_chars) |
+| MF04, punctuation only | 200, unsure, a content_id | **400** `text_too_short` (too_few_words) |
+| MF05, one very long "word" | 200, unsure, a content_id | **400** `text_too_short` (too_few_words) |
+| MF06, emoji only | 200, unsure, a content_id | **400** `text_too_short` (too_few_words) |
+
+The rejections from the audit log, plus MF07, which still gets through and is
+scored:
+
+```json
+{"timestamp": "2026-11-09T09:29:32+00:00", "creator_id": "attacker_MF03", "event": "rejected", "status": "rejected", "reason": "control_chars", "text_length": 21}
+{"timestamp": "2026-11-09T09:29:32+00:00", "creator_id": "attacker_MF04", "event": "rejected", "status": "rejected", "reason": "too_few_words", "text_length": 31}
+{"timestamp": "2026-11-09T09:29:32+00:00", "creator_id": "attacker_MF05", "event": "rejected", "status": "rejected", "reason": "too_few_words", "text_length": 4000}
+{"timestamp": "2026-11-09T09:29:32+00:00", "creator_id": "attacker_MF06", "event": "rejected", "status": "rejected", "reason": "too_few_words", "text_length": 200}
+{"timestamp": "2026-11-09T09:29:32+00:00", "content_id": "c_64413356a009", "creator_id": "attacker_MF07", "guess": "unsure", "model_score": 0.9064, "style_score": 1.0, "combined_score": 0.5, "status": "decided"}
+```
+
+MF05's `text_length` is 4,000. Earlier in this README I called it a
+300-character word, which was wrong: it's 4,000 characters of "a".
+
+The full run, in the same format as the before and after runs:
+
+| ID | Family | Targeting | Status | Content ID | Guess | Score | Verdict |
+|---|---|---|---|---|---|---|---|
+| EV01 | evasion | signal two: typos raise word variety | 200 | `c_d3745cb117f7` | unsure | 0.139 | BROKE: AI text, 0.5695 → unsure |
+| EV02 | evasion | signal two: broken-up sentences raise length spread | 200 | `c_5a30dee2cbf5` | human | 0.305 | BROKE: AI text, 0.3474 → **human** (was unsure before) |
+| EV03 | evasion | signal two: a pasted quotation changes the shape | 200 | `c_53cc409a9e89` | unsure | 0.076 | BROKE: AI text, 0.4618 → unsure |
+| EV04 | evasion | signal one: unusual words raise perplexity | 200 | `c_9bb544f5f2e8` | ai | 0.526 | HELD: 0.7629 → ai |
+| EV05 | evasion | both signals: heavy human editing pass | 200 | `c_577385143187` | human | 0.329 | BROKE: AI text, 0.3357 → **human** (was unsure before) |
+| EV06 | evasion | signal two: one very long sentence and one very short | 200 | `c_1233aed4f6f1` | unsure | 0.025 | BROKE: AI text, 0.4874 → unsure |
+| EV07 | evasion | signal two: padding with punctuation | 200 | `c_f07eda8fa1c5` | unsure | 0.181 | BROKE: AI text, 0.5903 → unsure |
+| EV08 | evasion | signal one: text below the token window | 200 | `c_240401cbfefc` | unsure | 0.012 | HELD: 10 words, 0.506 → unsure via length pull |
+| EV09 | evasion | both: AI text with a human opening paragraph bolted on | 200 | `c_540269d62705` | unsure | 0.303 | BROKE: AI text, 0.6515 → unsure |
+| EV10 | evasion | signal two: repeated stanza structure | 200 | `c_5200c30e288b` | ai | 0.537 | HELD: 0.7685 → ai |
+| FP01 | false_positive | plain, clear human writing with no flourishes | 200 | `c_e0409a90e8c4` | unsure | 0.231 | HELD: Human, 0.6157 → unsure |
+| FP02 | false_positive | human writing in a formal register | 200 | `c_f6f89d4896fc` | ai | 0.515 | BROKE: Human writing, 0.7577 → **ai** |
+| FP03 | false_positive | a non-native English speaker writing carefully | 200 | `c_a4ac68914149` | ai | 0.509 | BROKE: Human writing, 0.7543 → **ai** |
+| FP04 | false_positive | a student essay written to a rubric | 200 | `c_4192cf465017` | unsure | 0.396 | HELD: Human, 0.6982 → unsure |
+| FP05 | false_positive | technical documentation written by a person | 200 | `c_604848b5c115` | unsure | 0.480 | HELD: Human, 0.7398 → unsure (was ai before) |
+| FP06 | false_positive | a person imitating a formal template | 200 | `c_60ecfbc0203d` | unsure | 0.258 | HELD: Human, 0.6288 → unsure |
+| FP07 | false_positive | human writing that repeats a phrase deliberately | 200 | `c_d9eeb94d1ff3` | unsure | 0.166 | HELD: Human, 0.5831 → unsure |
+| FP08 | false_positive | very short genuine human submission | 200 | `c_0afe2b88ac74` | unsure | 0.002 | HELD: Human, 0.4989 → unsure |
+| PI01 | prompt_injection | instruction to ignore the check | 200 | `c_c1162c7cb974` | unsure | 0.062 | HELD: 0.4691 → unsure, not the human label it asked for. Text never read as instructions |
+| PI02 | prompt_injection | instruction disguised as a system message | 200 | `c_73c0752be2bb` | unsure | 0.278 | HELD: 0.361 → unsure. Fake SYSTEM line ignored |
+| PI03 | prompt_injection | instruction wrapped in the writer's voice | 200 | `c_07cbd746b776` | unsure | 0.011 | HELD: 0.4944 → unsure |
+| PI04 | prompt_injection | attempt to make the label text hostile | 200 | `c_2bc8a6715d37` | unsure | 0.096 | HELD: Label is fixed text and submitted text isn't echoed or logged, so the script tag goes nowhere |
+| PI05 | prompt_injection | attempt to inject into the audit log | 200 | `c_80768cc61e6e` | unsure | 0.050 | HELD: Submitted text isn't written to the log, and entries are json.dumps'd, so no forged fields |
+| PI06 | prompt_injection | instruction plus real human text | 200 | `c_f8705a979499` | unsure | 0.190 | HELD: 0.5951 → unsure. Instruction had no effect (human text still not labeled human) |
+| MF01 | malformed | text is only whitespace | 400 | `—` | — | — | HELD: 400 bad_text |
+| MF02 | malformed | text is a single character | 400 | `—` | — | — | HELD: 400 too_short |
+| MF03 | malformed | text is control characters | 400 | `—` | — | — | HELD: 400 bad_text, control_chars (was 200 + a label) |
+| MF04 | malformed | text is only punctuation | 400 | `—` | — | — | HELD: 400 text_too_short, too_few_words (was 200 + a label) |
+| MF05 | malformed | text is a very long single word | 400 | `—` | — | — | HELD: 400 text_too_short, too_few_words: one 4,000-character 'word' (was 200 + a label) |
+| MF06 | malformed | text is emoji only | 400 | `—` | — | — | HELD: 400 text_too_short, too_few_words: emoji aren't letters (was 200 + a label) |
+| MF07 | malformed | text is right-to-left script | 200 | `c_64413356a009` | unsure | 0.000 | HELD: 0.5 unsure, no crash. But signal one 0.906 on Arabic: a longer non-English text would be labeled ai |
+| MF08 | malformed | text is 60,000 characters | 400 | `—` | — | — | HELD: 400 too_long |
+| RQ01 | malformed | no text field at all | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ02 | malformed | no creator_id | 400 | `—` | — | — | HELD: 400 bad_creator_id |
+| RQ03 | malformed | text is a number | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ04 | malformed | text is a list | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ05 | malformed | text is null | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ06 | malformed | creator_id is an object | 400 | `—` | — | — | HELD: 400 bad_creator_id |
+| RQ07 | malformed | body is a JSON array, not an object | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ08 | malformed | body is unparseable JSON | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ09 | malformed | body is empty | 400 | `—` | — | — | HELD: 400 bad_text |
+| RQ10 | malformed | body is form-encoded, not JSON | 429 | `—` | — | — | HELD: 429. No creator_id, so it shared the IP bucket with RQ02/06–09 and never reached the route |
+| RQ11 | malformed | body is JSON claiming to be plain text | 429 | `—` | — | — | HELD: 429. Same as RQ10: the route's handling of a text/plain body is untested |
+| RQ12 | malformed | deeply nested JSON | 400 | `—` | — | — | HELD: 400 bad_text |
+| FL01_01 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_fbc260a7a56c` | unsure | 0.003 | HELD: 200, within 5/min |
+| FL01_02 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_117bbc850aca` | unsure | 0.003 | HELD: 200, within 5/min |
+| FL01_03 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_8012c7172b07` | unsure | 0.003 | HELD: 200, within 5/min |
+| FL01_04 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_9b3d6b3cd5f6` | unsure | 0.003 | HELD: 200, within 5/min |
+| FL01_05 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_11551f45cf3e` | unsure | 0.003 | HELD: 200, within 5/min |
+| FL01_06 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+| FL01_07 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+| FL01_08 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+| FL01_09 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+| FL01_10 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+| FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+| FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD: 429 rate_limited |
+
+**Did it help, and how do I know:** yes, on what it was aimed at, and nowhere
+else.
+
+- **What improved, measured:** the malformed family went from 16 held / 4
+  broke to 20 / 0, so the attack set went from 13 broke to 9. The four junk
+  inputs now get a 400 that says what's wrong, and they're logged as
+  rejections, not as decisions with a label. They also stop costing a model
+  run: the check happens before gpt2 is called.
+- **What didn't move:** all five criteria have the same numbers as the after
+  run, and so does every scored attack. That was the prediction, and it's
+  what I'd want: the check never reaches text that has writing in it. The
+  lowest letter share of any text that passed is 0.88, so there's room
+  between real writing and the 0.50 line. Criterion 4 is still 26 of 27,
+  because its miss is the rate limiter, not validation.
+- **What it cost.** None of these are in my test sets. I found them by
+  calling `app.py::_writing_problem` directly on inputs I wrote to probe it:
+  - **Short Chinese or Japanese with no punctuation inside the sentence is
+    turned away.** Those scripts don't put spaces between words, so
+    "我今天很累想早点睡觉" is one run of letters, one "word", and it gets
+    `text_too_short`. With commas inside it passes. Counting words by runs
+    of letters is a Latin-script idea. The same writers criterion 1 is
+    about, people writing outside English, pay for it.
+  - **Writing that's mostly maths is turned away.**
+    "x = 3, y = 4, so x^2 + y^2 = 25." is under half letters, so it gets
+    `no_writing`. On a writing site that's rare, but it's a real submission.
+  - **It's easy to step around.** Three 1,000-character "words" pass the
+    check and get scored, and so would any junk padded with three real words
+    and enough letters. The check catches junk that isn't trying. It isn't a
+    defence against someone who has read it.
+- **The trade:** I'd keep it. Before, these inputs got a label and a
+  content_id for something that wasn't writing, and only the short-text pull
+  kept signal one's 0.997 from turning into an `ai` label. Now they get a
+  plain 400. The CJK cost is the one I'd fix next: count characters, not
+  words, for scripts that don't use spaces.
+
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
@@ -1220,7 +1435,9 @@ evasions worse.
 After the improvement, 13 attacks still get through and 3 criteria are still
 missed. They're grouped by the problem behind them, from the Diagnoses above.
 Where I say what a fix would do, the numbers come from replaying the recorded
-signal one scores, the same way I picked the improvement. I didn't build these.
+signal one scores, the same way I picked the improvement. I didn't build these,
+except the junk-input check, which I built afterwards as a stretch (9 attacks
+still get through after it).
 
 **Two writers still accused: FP02 and FP03** (0.758 and 0.754, just over the
 0.75 line). *Problem 1: both signals read plain writing as AI.*
@@ -1276,6 +1493,13 @@ route accepts text with no words.*
   writing to check.
 - **Why I stopped:** only because Milestone 5 allowed one change. This is the
   cheapest fix left and has no trade on the scoring side. I'd do it next.
+- **Update (stretch, second measured improvement):** I did it, with one
+  difference from the plan here. Words are counted as runs of letters in
+  any script, not with `stylometry.words`, which only knows a–z and would
+  have rejected MF07's Arabic. All four now get 400, and the attack set is at
+  9 broke. It cost something after all, just not on the scoring side: short
+  Chinese or Japanese text with no punctuation inside it is now rejected.
+  See Stretch Features.
 
 **Criterion 2 still missed** (gap 0.363, target 0.40; coverage now passes).
 

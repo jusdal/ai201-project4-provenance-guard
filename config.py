@@ -51,6 +51,12 @@ DETECTOR_MAX_TOKENS = 400
 # sending megabytes. See notes/milestone1.md.
 MAX_TEXT_CHARS = 5000
 
+# Text with no writing in it is turned away before the model runs (README,
+# Stretch Features: a second measured improvement). Words are runs of letters
+# in any script, so non-Latin writing still counts.
+MIN_WORDS = 3
+MIN_LETTER_SHARE = 0.5  # of the non-space characters
+
 
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
 # How much each signal counts toward the combined score. Equal: on the
